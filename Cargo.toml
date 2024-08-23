@@ -24,8 +24,10 @@ group = { version = "0.13", optional = true, default-features = false }
 pairing = { version = "0.23", optional = true }
 rand_core = { version = "0.6", default-features = false }
 subtle = { version = "2.2.1", default-features = false }
-sp1-lib = { version = "4.0.0", default-features = false }
 zeroize = { version = "1.4", optional = true, default-features = false }
+
+[target.'cfg(target_os = "zkvm")'.dependencies]
+sp1-lib = { version = "4.0.0", default-features = false }
 
 [dev-dependencies]
 csv = ">= 1.0, < 1.2" # csv 1.2 has MSRV 1.60
