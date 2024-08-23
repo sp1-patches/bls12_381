@@ -353,7 +353,7 @@ impl Scalar {
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Scalar` representation.
     pub fn from_raw(val: [u64; 4]) -> Self {
-        (&Scalar(val)).mul(&R2)
+        Scalar(val).mul(&R2)
     }
 
     #[inline]
@@ -608,6 +608,7 @@ impl Scalar {
         let (r7, _) = adc(r7, carry2, carry);
 
         // Result may be within MODULUS of the correct value
+        #[allow(clippy::needless_borrow)]
         (&Scalar([r4, r5, r6, r7])).sub(&MODULUS)
     }
 
@@ -715,6 +716,8 @@ impl Scalar {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
+
+        #[allow(clippy::needless_borrow)]
         (&Scalar([d0, d1, d2, d3])).sub(&MODULUS)
     }
 
@@ -742,7 +745,7 @@ impl Scalar {
             return Scalar::from(0);
         }
 
-        let mut out = self.clone();
+        let mut out = *self;
 
         while n >= 64 {
             let mut t = 0;
@@ -810,7 +813,7 @@ impl Field for Scalar {
         // (t - 1) // 2 = 6104339283789297388802252303364915521546564123189034618274734669823
         ff::helpers::sqrt_tonelli_shanks(
             self,
-            &[
+            [
                 0x7fff_2dff_7fff_ffff,
                 0x04d0_ec02_a9de_d201,
                 0x94ce_bea4_199c_ec04,

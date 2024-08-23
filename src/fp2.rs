@@ -280,13 +280,13 @@ impl Fp2 {
         // c0' = (c0 + c1) * (c0 - c1)
         // c1' = 2 * c0 * c1
 
-        let a = (&self.c0).cpu_add(&self.c1);
-        let b = (&self.c0).cpu_sub(&self.c1);
-        let c = (&self.c0).cpu_add(&self.c0);
+        let a = self.c0.cpu_add(&self.c1);
+        let b = self.c0.cpu_sub(&self.c1);
+        let c = self.c0.cpu_add(&self.c0);
 
         Fp2 {
-            c0: (&a).cpu_mul(&b),
-            c1: (&c).cpu_mul(&self.c1),
+            c0: a.cpu_mul(&b),
+            c1: c.cpu_mul(&self.c1),
         }
     }
 
@@ -377,8 +377,8 @@ impl Fp2 {
     /// CPU version of the addition operation. Necessary to prevent syscalls in unconstrained mode.
     pub(crate) fn cpu_add(&self, rhs: &Fp2) -> Fp2 {
         Fp2 {
-            c0: (&self.c0).cpu_add(&rhs.c0),
-            c1: (&self.c1).cpu_add(&rhs.c1),
+            c0: self.c0.cpu_add(&rhs.c0),
+            c1: self.c1.cpu_add(&rhs.c1),
         }
     }
 
@@ -408,10 +408,11 @@ impl Fp2 {
     }
 
     /// CPU version of the subtraction operation. Necessary to prevent syscalls in unconstrained mode.
+    #[allow(dead_code)]
     pub(crate) fn cpu_sub(&self, rhs: &Fp2) -> Fp2 {
         Fp2 {
-            c0: (&self.c0).cpu_sub(&rhs.c0),
-            c1: (&self.c1).cpu_sub(&rhs.c1),
+            c0: self.c0.cpu_sub(&rhs.c0),
+            c1: self.c1.cpu_sub(&rhs.c1),
         }
     }
 
@@ -425,8 +426,8 @@ impl Fp2 {
                 out
             } else {
                 Fp2 {
-                    c0: (&self.c0).sub(&rhs.c0),
-                    c1: (&self.c1).sub(&rhs.c1),
+                    c0: self.c0.sub(&rhs.c0),
+                    c1: self.c1.sub(&rhs.c1),
                 }
             }
         }
@@ -435,8 +436,8 @@ impl Fp2 {
     /// CPU version of the negation operation. Necessary to prevent syscalls in unconstrained mode.
     pub(crate) fn cpu_neg(&self) -> Fp2 {
         Fp2 {
-            c0: (&self.c0).cpu_neg(),
-            c1: (&self.c1).cpu_neg(),
+            c0: self.c0.cpu_neg(),
+            c1: self.c1.cpu_neg(),
         }
     }
 
@@ -485,7 +486,7 @@ impl Fp2 {
                     c0: x0.c1.cpu_neg(),
                     c1: x0.c0,
                 },
-                alpha.ct_eq(&(&Fp2::one()).cpu_neg()),
+                alpha.ct_eq(&Fp2::one().cpu_neg()),
             )
             // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
             .or_else(|| {

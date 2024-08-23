@@ -450,9 +450,9 @@ impl G1Affine {
     /// converting one of the points to projective coordinates and then converting the output back.
     pub fn add_affine(&self, rhs: &Self) -> Self {
         if self.is_identity().into() {
-            return rhs.clone();
+            return *rhs;
         } else if rhs.is_identity().into() {
-            return self.clone();
+            return *self;
         }
 
         cfg_if::cfg_if! {

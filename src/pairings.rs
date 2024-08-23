@@ -739,8 +739,8 @@ pub fn multi_miller_loop(terms: &[(&G1Affine, &G2Prepared)]) -> MillerLoopResult
             for term in self.terms {
                 let either_identity = term.0.is_identity() | term.1.infinity;
 
-                let new_f = ell(&f, &term.1.coeffs[index], term.0);
-                *f = Fp12::conditional_select(&new_f, &f, either_identity);
+                let new_f = ell(f, &term.1.coeffs[index], term.0);
+                *f = Fp12::conditional_select(&new_f, f, either_identity);
             }
             self.index += 1;
         }
@@ -749,8 +749,8 @@ pub fn multi_miller_loop(terms: &[(&G1Affine, &G2Prepared)]) -> MillerLoopResult
             for term in self.terms {
                 let either_identity = term.0.is_identity() | term.1.infinity;
 
-                let new_f = ell(&f, &term.1.coeffs[index], term.0);
-                *f = Fp12::conditional_select(&new_f, &f, either_identity);
+                let new_f = ell(f, &term.1.coeffs[index], term.0);
+                *f = Fp12::conditional_select(&new_f, f, either_identity);
             }
             self.index += 1;
         }
@@ -784,11 +784,11 @@ pub fn pairing(p: &G1Affine, q: &G2Affine) -> Gt {
 
         fn doubling_step(&mut self, f: &mut Self::Output) {
             let coeffs = doubling_step(&mut self.cur);
-            *f = ell(&f, &coeffs, &self.p);
+            *f = ell(f, &coeffs, &self.p);
         }
         fn addition_step(&mut self, f: &mut Self::Output) {
             let coeffs = addition_step(&mut self.cur, &self.base);
-            *f = ell(&f, &coeffs, &self.p);
+            *f = ell(f, &coeffs, &self.p);
         }
         fn square_output(f: &mut Self::Output) {
             *f = f.square();

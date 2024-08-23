@@ -495,7 +495,7 @@ impl Fp {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
-        (&Fp([d0, d1, d2, d3, d4, d5])).subtract_p()
+        Fp([d0, d1, d2, d3, d4, d5]).subtract_p()
     }
 
     #[inline]
@@ -574,7 +574,7 @@ impl Fp {
                 }
                 out
             } else {
-                (&rhs.neg()).add(self)
+                rhs.neg().add(self)
             }
         }
     }
@@ -658,7 +658,7 @@ impl Fp {
 
         // Because we represent F_p elements in non-redundant form, we need a final
         // conditional subtraction to ensure the output is in range.
-        (&Fp([u0, u1, u2, u3, u4, u5])).subtract_p()
+        Fp([u0, u1, u2, u3, u4, u5]).subtract_p()
     }
 
     #[inline(always)]
@@ -736,7 +736,7 @@ impl Fp {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
-        (&Fp([r6, r7, r8, r9, r10, r11])).subtract_p()
+        Fp([r6, r7, r8, r9, r10, r11]).subtract_p()
     }
 
     #[inline]
