@@ -8,7 +8,6 @@ use group::{
     Curve, Group, GroupEncoding, UncompressedEncoding,
 };
 use rand_core::RngCore;
-use sp1_lib::bls12381::decompress_pubkey;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(feature = "alloc")]
@@ -16,11 +15,17 @@ use group::WnafGroup;
 
 use crate::fp::Fp;
 use crate::Scalar;
-use alloc::vec;
-use alloc::vec::Vec;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "alloc")] {
+        extern crate alloc;
+        use alloc::vec;
+        use alloc::vec::Vec;
+    }
+}
 // Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
 #[cfg(target_os = "zkvm")]
-use sp1_lib::{syscall_bls12381_add, syscall_bls12381_double};
+use sp1_lib::{bls12381::decompress_pubkey, syscall_bls12381_add, syscall_bls12381_double};
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
