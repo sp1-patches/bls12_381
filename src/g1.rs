@@ -1032,7 +1032,7 @@ impl G1Projective {
 
     /// Performs a Variable Base Multiscalar Multiplication.
     pub fn msm_variable_base(points: &[G1Projective], scalars: &[Scalar]) -> G1Projective {
-        println!("cycle-tracker-start: msm_variable_base");
+        println!("cycle-tracker-report-start: msm_variable_base");
         let c = if scalars.len() < 32 {
             3
         } else {
@@ -1117,7 +1117,7 @@ impl G1Projective {
                 total
             })
             + lowest;
-        println!("cycle-tracker-end: msm_variable_base");
+        println!("cycle-tracker-report-end: msm_variable_base");
         out
     }
 }
