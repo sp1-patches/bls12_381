@@ -644,16 +644,7 @@ impl<'a, 'b> Add<&'b G1Projective> for &'a G1Projective {
 
     #[inline]
     fn add(self, rhs: &'b G1Projective) -> G1Projective {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let affine_self = &G1Affine::from(*self);
-                let affine_rhs = &G1Affine::from(*rhs);
-                let affine_sum = affine_self + affine_rhs;
-                G1Projective::from(affine_sum)
-            } else {
-                self.add_proj(rhs)
-            }
-        }
+        self.add_proj(rhs)
     }
 }
 
@@ -1041,6 +1032,7 @@ impl G1Projective {
 
     /// Performs a Variable Base Multiscalar Multiplication.
     pub fn msm_variable_base(points: &[G1Projective], scalars: &[Scalar]) -> G1Projective {
+        println!("cycle-tracker-start: msm_variable_base");
         let c = if scalars.len() < 32 {
             3
         } else {
@@ -1114,7 +1106,7 @@ impl G1Projective {
         // We store the sum for the lowest window.
         let lowest = *window_sums.first().unwrap();
         // We're traversing windows from high to low.
-        window_sums[1..]
+        let out = window_sums[1..]
             .iter()
             .rev()
             .fold(zero, |mut total, sum_i| {
@@ -1124,7 +1116,9 @@ impl G1Projective {
                 }
                 total
             })
-            + lowest
+            + lowest;
+        println!("cycle-tracker-end: msm_variable_base");
+        out
     }
 }
 
