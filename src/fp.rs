@@ -473,13 +473,18 @@ impl Fp {
     }
 
     #[inline]
-    #[cfg(target_os = "zkvm")]
     pub fn add_inp(&mut self, rhs: &Fp) {
-        unsafe {
-            syscall_bls12381_fp_addmod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
-            );
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp_addmod(
+                        self.0.as_mut_ptr() as *mut u32,
+                        rhs.0.as_ptr() as *const u32,
+                    );
+                }
+            } else {
+                *self = self.cpu_add(rhs);
+            }
         }
     }
 
@@ -500,15 +505,19 @@ impl Fp {
 
     #[inline]
     pub fn add(&self, rhs: &Fp) -> Fp {
+        let mut out = *self;
+        out.add_inp(rhs);
+        out
+    }
+
+    #[inline]
+    pub fn double_inp(&mut self) {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
-                let mut out = self.clone();
-                unsafe {
-                    syscall_bls12381_fp_addmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-                out
+                let tmp = *self;
+                self.add_inp(&tmp);
             } else {
-                self.cpu_add(rhs)
+                *self = self.cpu_add(self);
             }
         }
     }
@@ -554,29 +563,26 @@ impl Fp {
     }
 
     #[inline]
-    #[cfg(target_os = "zkvm")]
     pub fn sub_inp(&mut self, rhs: &Fp) {
-        unsafe {
-            syscall_bls12381_fp_submod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
-            );
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp_submod(
+                        self.0.as_mut_ptr() as *mut u32,
+                        rhs.0.as_ptr() as *const u32,
+                    );
+                }
+            } else {
+                *self = self.cpu_sub(rhs);
+            }
         }
     }
 
     #[inline]
     pub fn sub(&self, rhs: &Fp) -> Fp {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let mut out = self.clone();
-                unsafe {
-                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-                out
-            } else {
-                rhs.neg().add(self)
-            }
-        }
+        let mut out = *self;
+        out.sub_inp(rhs);
+        out
     }
 
     #[inline]
@@ -740,15 +746,20 @@ impl Fp {
     }
 
     #[inline]
-    #[cfg(target_os = "zkvm")]
     pub fn mul_inp(&mut self, rhs: &Fp) {
-        unsafe {
-            syscall_bls12381_fp_mulmod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
-            );
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp_mulmod(
+                        self.0.as_mut_ptr() as *mut u32,
+                        rhs.0.as_ptr() as *const u32,
+                    );
+                }
+                self.mul_r_inv_internal();
+            } else {
+                *self = self.cpu_mul(rhs);
+            }
         }
-        self.mul_r_inv_internal();
     }
 
     #[inline]
@@ -801,18 +812,9 @@ impl Fp {
 
     #[inline]
     pub fn mul(&self, rhs: &Fp) -> Fp {
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                let mut out = self.clone();
-                unsafe {
-                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
-                }
-                out.mul_r_inv_internal();
-                out
-            } else {
-                self.cpu_mul(rhs)
-            }
-        }
+        let mut out = *self;
+        out.mul_inp(rhs);
+        out
     }
 
     /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
@@ -841,15 +843,20 @@ impl Fp {
     }
 
     #[inline]
-    #[cfg(target_os = "zkvm")]
     pub fn square_inp(&mut self) {
-        unsafe {
-            syscall_bls12381_fp_mulmod(
-                self.0.as_mut_ptr() as *mut u32,
-                self.0.as_ptr() as *const u32,
-            );
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    syscall_bls12381_fp_mulmod(
+                        self.0.as_mut_ptr() as *mut u32,
+                        self.0.as_ptr() as *const u32,
+                    );
+                }
+                self.mul_r_inv_internal();
+            } else {
+                *self = self.cpu_square();
+            }
         }
-        self.mul_r_inv_internal();
     }
 
     /// CPU version of the squaring operation. Necessary to prevent syscalls in unconstrained mode.
