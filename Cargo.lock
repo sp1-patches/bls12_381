@@ -65,26 +65,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bls12_381"
-version = "0.8.0"
-dependencies = [
- "cfg-if",
- "criterion",
- "csv",
- "digest",
- "ff",
- "group",
- "pairing",
- "rand_core",
- "rand_xorshift",
- "sha2",
- "sha3",
- "sp1-lib",
- "subtle",
- "zeroize",
-]
-
-[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -824,6 +804,26 @@ dependencies = [
  "p3-symmetric",
  "serde",
  "sha2",
+]
+
+[[package]]
+name = "sp1_bls12_381"
+version = "0.8.0"
+dependencies = [
+ "cfg-if",
+ "criterion",
+ "csv",
+ "digest",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core",
+ "rand_xorshift",
+ "sha2",
+ "sha3",
+ "sp1-lib",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
