@@ -2,16 +2,16 @@
 name = "bls12_381"
 version = "0.8.0"
 authors = [
+    "Bhargav Annem <bhargav.annem@gmail.com>",
     "Sean Bowe <ewillbefull@gmail.com>",
     "Jack Grigg <thestr4d@gmail.com>",
 ]
 edition = "2021"
 rust-version = "1.56"
 description = "Implementation of the BLS12-381 pairing-friendly elliptic curve construction"
-documentation = "https://docs.rs/bls12_381/"
-homepage = "https://github.com/zkcrypto/bls12_381"
-repository = "https://github.com/zkcrypto/bls12_381"
+homepage = "https://github.com/sp1-patches/bls12_381"
 license = "MIT/Apache-2.0"
+repository = "https://github.com/sp1-patches/bls12_381"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "katex-header.html"]
