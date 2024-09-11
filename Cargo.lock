@@ -84,6 +84,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d696c370c750c948ada61c69a0ee2cbbb9c50b1019ddb86d9317157a99c2cae"
 
 [[package]]
+name = "bls12_381"
+version = "0.8.0"
+dependencies = [
+ "cfg-if",
+ "criterion",
+ "csv",
+ "digest",
+ "ff",
+ "group",
+ "pairing",
+ "rand_core",
+ "rand_xorshift",
+ "sha2",
+ "sha3",
+ "sp1-lib",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -722,26 +742,6 @@ dependencies = [
  "hex",
  "serde",
  "snowbridge-amcl",
-]
-
-[[package]]
-name = "sp1_bls12_381"
-version = "0.8.0"
-dependencies = [
- "cfg-if",
- "criterion",
- "csv",
- "digest",
- "ff",
- "group",
- "pairing",
- "rand_core",
- "rand_xorshift",
- "sha2",
- "sha3",
- "sp1-lib",
- "subtle",
- "zeroize",
 ]
 
 [[package]]
