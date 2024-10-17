@@ -22,7 +22,7 @@ cfg_if! {
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
 #[derive(Copy, Clone)]
 #[repr(transparent)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
-pub struct Fp(pub(crate) [u64; 6]);
+pub struct Fp(pub [u64; 6]);
 
 impl fmt::Debug for Fp {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
