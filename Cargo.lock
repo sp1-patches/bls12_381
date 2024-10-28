@@ -816,6 +816,7 @@ dependencies = [
  "digest",
  "ff",
  "group",
+ "hex",
  "pairing",
  "rand_core",
  "rand_xorshift",

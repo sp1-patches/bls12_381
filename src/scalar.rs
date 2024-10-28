@@ -972,7 +972,6 @@ fn test_inv() {
     assert_eq!(inv, INV);
 }
 
-#[cfg(feature = "std")]
 #[test]
 fn test_debug() {
     assert_eq!(

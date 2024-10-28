@@ -25,6 +25,7 @@ pairing = { version = "0.23", optional = true }
 rand_core = { version = "0.6", default-features = false }
 subtle = { version = "2.2.1", default-features = false }
 zeroize = { version = "1.4", optional = true, default-features = false }
+hex = { version = "0.4", optional = true, default-features = false, features = ["alloc"] }
 
 [target.'cfg(target_os = "zkvm")'.dependencies]
 sp1-lib = { version = "4.0.0", default-features = false }
@@ -42,7 +43,7 @@ bits = ["ff/bits"]
 groups = ["group"]
 pairings = ["groups", "pairing"]
 alloc = ["group/alloc"]
-experimental = ["digest", "groups"]
+experimental = ["digest", "groups", "hex"]
 nightly = ["subtle/nightly"]
 
 [[test]]
