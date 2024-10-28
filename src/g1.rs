@@ -138,7 +138,15 @@ impl<'a, 'b> Add<&'b G1Projective> for &'a G1Affine {
 
     #[inline]
     fn add(self, rhs: &'b G1Projective) -> G1Projective {
-        rhs.add_mixed(self)
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let affine_rhs = G1Affine::from(rhs);
+                let affine_sum = self + &affine_rhs;
+                G1Projective::from(affine_sum)
+            } else {
+                rhs.add_mixed(self)
+            }
+        }
     }
 }
 
@@ -147,7 +155,24 @@ impl<'a, 'b> Add<&'b G1Affine> for &'a G1Projective {
 
     #[inline]
     fn add(self, rhs: &'b G1Affine) -> G1Projective {
-        self.add_mixed(rhs)
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let affine_self = G1Affine::from(self);
+                let affine_sum = &affine_self + rhs;
+                G1Projective::from(affine_sum)
+            } else {
+                self.add_mixed(rhs)
+            }
+        }
+    }
+}
+
+impl<'a, 'b> Add<&'b G1Affine> for &'a G1Affine {
+    type Output = G1Affine;
+
+    #[inline]
+    fn add(self, rhs: &'b G1Affine) -> G1Affine {
+        self.add_affine(rhs)
     }
 }
 
@@ -619,7 +644,7 @@ impl<'a, 'b> Add<&'b G1Projective> for &'a G1Projective {
 
     #[inline]
     fn add(self, rhs: &'b G1Projective) -> G1Projective {
-        self.add(rhs)
+        self.add_proj(rhs)
     }
 }
 
@@ -672,11 +697,10 @@ impl_binops_multiplicative_mixed!(G1Affine, Scalar, G1Projective);
 impl_binops_multiplicative_mixed!(Scalar, G1Affine, G1Projective);
 impl_binops_multiplicative_mixed!(Scalar, G1Projective, G1Projective);
 
-#[inline(always)]
-fn mul_by_3b(a: Fp) -> Fp {
-    let a = a + a; // 2
-    let a = a + a; // 4
-    a + a + a // 12
+fn mul_by_3b_inp(a: &mut Fp) {
+    a.double_inp();
+    a.double_inp();
+    a.double_inp();
 }
 
 impl G1Projective {
@@ -716,25 +740,44 @@ impl G1Projective {
     /// Computes the doubling of this point.
     pub fn double(&self) -> G1Projective {
         // Algorithm 9, https://eprint.iacr.org/2015/1060.pdf
+        let mut t0 = self.y;
+        t0.square_inp();
 
-        let t0 = self.y.square();
-        let z3 = t0 + t0;
-        let z3 = z3 + z3;
-        let z3 = z3 + z3;
-        let t1 = self.y * self.z;
-        let t2 = self.z.square();
-        let t2 = mul_by_3b(t2);
-        let x3 = t2 * z3;
-        let y3 = t0 + t2;
-        let z3 = t1 * z3;
-        let t1 = t2 + t2;
-        let t2 = t1 + t2;
-        let t0 = t0 - t2;
-        let y3 = t0 * y3;
-        let y3 = x3 + y3;
-        let t1 = self.x * self.y;
-        let x3 = t0 * t1;
-        let x3 = x3 + x3;
+        let mut z3 = t0;
+        z3.double_inp();
+        z3.double_inp();
+        z3.double_inp();
+
+        let mut t1 = self.y;
+        t1.mul_inp(&self.z);
+
+        let mut t2 = self.z;
+        t2.square_inp();
+        mul_by_3b_inp(&mut t2);
+
+        let mut x3 = t2;
+        x3.mul_inp(&z3);
+
+        let mut y3 = t0;
+        y3.add_inp(&t2);
+
+        z3.mul_inp(&t1);
+
+        let mut t1 = t2;
+        t1.double_inp();
+
+        t2.add_inp(&t1);
+        t0.sub_inp(&t2);
+
+        y3.mul_inp(&t0);
+        y3.add_inp(&x3);
+
+        let mut t1 = self.x;
+        t1.mul_inp(&self.y);
+
+        x3 = t0;
+        x3.mul_inp(&t1);
+        x3.double_inp();
 
         let tmp = G1Projective {
             x: x3,
@@ -746,42 +789,74 @@ impl G1Projective {
     }
 
     /// Adds this point to another point.
-    pub fn add(&self, rhs: &G1Projective) -> G1Projective {
+    pub fn add_proj(&self, rhs: &G1Projective) -> G1Projective {
         // Algorithm 7, https://eprint.iacr.org/2015/1060.pdf
+        let mut t0 = self.x;
+        t0.mul_inp(&rhs.x);
 
-        let t0 = self.x * rhs.x;
-        let t1 = self.y * rhs.y;
-        let t2 = self.z * rhs.z;
-        let t3 = self.x + self.y;
-        let t4 = rhs.x + rhs.y;
-        let t3 = t3 * t4;
-        let t4 = t0 + t1;
-        let t3 = t3 - t4;
-        let t4 = self.y + self.z;
-        let x3 = rhs.y + rhs.z;
-        let t4 = t4 * x3;
-        let x3 = t1 + t2;
-        let t4 = t4 - x3;
-        let x3 = self.x + self.z;
-        let y3 = rhs.x + rhs.z;
-        let x3 = x3 * y3;
-        let y3 = t0 + t2;
-        let y3 = x3 - y3;
-        let x3 = t0 + t0;
-        let t0 = x3 + t0;
-        let t2 = mul_by_3b(t2);
-        let z3 = t1 + t2;
-        let t1 = t1 - t2;
-        let y3 = mul_by_3b(y3);
-        let x3 = t4 * y3;
-        let t2 = t3 * t1;
-        let x3 = t2 - x3;
-        let y3 = y3 * t0;
-        let t1 = t1 * z3;
-        let y3 = t1 + y3;
-        let t0 = t0 * t3;
-        let z3 = z3 * t4;
-        let z3 = z3 + t0;
+        let mut t1 = self.y;
+        t1.mul_inp(&rhs.y);
+
+        let mut t2 = self.z;
+        t2.mul_inp(&rhs.z);
+
+        let mut t3 = self.x;
+        t3.add_inp(&self.y);
+
+        let mut t4 = rhs.x;
+        t4.add_inp(&rhs.y);
+        t3.mul_inp(&t4);
+
+        t4 = t0;
+        t4.add_inp(&t1);
+        t3.sub_inp(&t4);
+
+        t4 = self.y;
+        t4.add_inp(&self.z);
+
+        let mut x3 = rhs.y;
+        x3.add_inp(&rhs.z);
+        t4.mul_inp(&x3);
+
+        x3 = t1;
+        x3.add_inp(&t2);
+        t4.sub_inp(&x3);
+
+        x3 = self.x;
+        x3.add_inp(&self.z);
+
+        let mut y3 = rhs.x;
+        y3.add_inp(&rhs.z);
+        x3.mul_inp(&y3);
+
+        y3 = t0;
+        y3.add_inp(&t2);
+        x3.sub_inp(&y3);
+
+        y3 = t0;
+        y3.double_inp();
+        t0.add_inp(&y3);
+
+        mul_by_3b_inp(&mut t2);
+
+        let mut z3 = t1;
+        z3.add_inp(&t2);
+        t1.sub_inp(&t2);
+
+        mul_by_3b_inp(&mut y3);
+        x3.mul_inp(&y3);
+
+        t2 = t3;
+        t2.mul_inp(&t1);
+        x3 = t2;
+
+        y3.mul_inp(&t0);
+        t1.mul_inp(&z3);
+        y3.add_inp(&t1);
+
+        t0.mul_inp(&t3);
+        z3.mul_inp(&t4);
+        z3.add_inp(&t0);
 
         G1Projective {
             x: x3,
@@ -793,33 +868,56 @@ impl G1Projective {
     /// Adds this point to another point in the affine model.
     pub fn add_mixed(&self, rhs: &G1Affine) -> G1Projective {
         // Algorithm 8, https://eprint.iacr.org/2015/1060.pdf
+        let mut t0 = self.x;
+        t0.mul_inp(&rhs.x);
 
-        let t0 = self.x * rhs.x;
-        let t1 = self.y * rhs.y;
-        let t3 = rhs.x + rhs.y;
-        let t4 = self.x + self.y;
-        let t3 = t3 * t4;
-        let t4 = t0 + t1;
-        let t3 = t3 - t4;
-        let t4 = rhs.y * self.z;
-        let t4 = t4 + self.y;
-        let y3 = rhs.x * self.z;
-        let y3 = y3 + self.x;
-        let x3 = t0 + t0;
-        let t0 = x3 + t0;
-        let t2 = mul_by_3b(self.z);
-        let z3 = t1 + t2;
-        let t1 = t1 - t2;
-        let y3 = mul_by_3b(y3);
-        let x3 = t4 * y3;
-        let t2 = t3 * t1;
-        let x3 = t2 - x3;
-        let y3 = y3 * t0;
-        let t1 = t1 * z3;
-        let y3 = t1 + y3;
-        let t0 = t0 * t3;
-        let z3 = z3 * t4;
-        let z3 = z3 + t0;
+        let mut t1 = self.y;
+        t1.mul_inp(&rhs.y);
+
+        let mut t3 = rhs.x;
+        t3.add_inp(&rhs.y);
+
+        let mut t4 = self.x;
+        t4.add_inp(&self.y);
+        t3.mul_inp(&t4);
+
+        t4 = t0;
+        t4.add_inp(&t1);
+        t3.sub_inp(&t4);
+
+        t4 = rhs.y;
+        t4.mul_inp(&self.z);
+        t4.add_inp(&self.y);
+
+        let mut y3 = rhs.x;
+        y3.mul_inp(&self.z);
+        y3.add_inp(&self.x);
+
+        let mut x3 = t0;
+        x3.double_inp();
+        x3.add_inp(&t0);
+
+        let mut t2 = self.z;
+        mul_by_3b_inp(&mut t2);
+
+        let mut z3 = t1;
+        z3.add_inp(&t2);
+        t1.sub_inp(&t2);
+
+        mul_by_3b_inp(&mut y3);
+        x3.mul_inp(&t4);
+
+        t2 = t3;
+        t2.mul_inp(&t1);
+        x3.sub_inp(&t2);
+
+        y3.mul_inp(&t0);
+        t1.mul_inp(&z3);
+        y3.add_inp(&t1);
+
+        t0.mul_inp(&t3);
+        z3.mul_inp(&t4);
+        z3.add_inp(&t0);
 
         let tmp = G1Projective {
             x: x3,
@@ -934,6 +1032,7 @@ impl G1Projective {
 
     /// Performs a Variable Base Multiscalar Multiplication.
     pub fn msm_variable_base(points: &[G1Projective], scalars: &[Scalar]) -> G1Projective {
+        println!("cycle-tracker-report-start: msm_variable_base");
         let c = if scalars.len() < 32 {
             3
         } else {
@@ -1007,7 +1106,7 @@ impl G1Projective {
         // We store the sum for the lowest window.
         let lowest = *window_sums.first().unwrap();
         // We're traversing windows from high to low.
-        window_sums[1..]
+        let out = window_sums[1..]
             .iter()
             .rev()
             .fold(zero, |mut total, sum_i| {
@@ -1017,7 +1116,9 @@ impl G1Projective {
                 }
                 total
             })
-            + lowest
+            + lowest;
+        println!("cycle-tracker-report-end: msm_variable_base");
+        out
     }
 }
 
@@ -1148,7 +1249,15 @@ impl Group for G1Projective {
 
     #[must_use]
     fn double(&self) -> Self {
-        self.double()
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let affine = G1Affine::from(*self);
+                let doubled_affine = &affine + &affine;
+                G1Projective::from(doubled_affine)
+            } else {
+                self.double()
+            }
+        }
     }
 }
 
