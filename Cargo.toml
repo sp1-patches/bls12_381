@@ -36,6 +36,7 @@ criterion = "0.3"
 rand_xorshift = "0.3"
 sha2 = "0.10"
 sha3 = "0.10"
+rand = "0.8"
 
 [features]
 default = ["groups", "pairings", "alloc", "bits"]

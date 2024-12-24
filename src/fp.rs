@@ -1,7 +1,6 @@
 //! This module provides an implementation of the BLS12-381 base field `GF(p)`
 //! where `p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
 
-use cfg_if::cfg_if;
 use core::fmt;
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
@@ -9,13 +8,14 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
-// Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
-cfg_if! {
-    if #[cfg(target_os = "zkvm")] {
-        use sp1_lib::{syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bls12381_fp_mulmod };
-        use sp1_lib::{io::{hint_slice, read_vec}, unconstrained};
-    }
-}
+#[cfg(target_os = "zkvm")]
+use {
+    sp1_lib::{
+        io::{hint_slice, read_vec},
+        unconstrained,
+    },
+    sp1_lib::{syscall_bls12381_fp_addmod, syscall_bls12381_fp_mulmod, syscall_bls12381_fp_submod},
+};
 
 // The internal representation of this type is six 64-bit unsigned
 // integers in little-endian order. `Fp` values are always in
@@ -382,30 +382,60 @@ impl Fp {
     pub fn sqrt(&self) -> CtOption<Self> {
         #[cfg(target_os = "zkvm")]
         {
+            if self.is_zero().into() {
+                return CtOption::new(Self::zero(), Choice::from(1u8));
+            }
+
+            let nqr = Self::from_bytes(&{
+                let mut buf = [0; 48];
+                buf[47] = 2;
+                buf
+            })
+            .unwrap();
+
             // Compute the square root using the zkvm syscall
             unconstrained! {
                 let mut buf = [0u8; 49]; // Allocate 49 bytes to include the flag
-                self.cpu_sqrt().map(|root| {
-                    buf[0..48].copy_from_slice(&root.to_bytes());
+
+                if let Some(root) = self.cpu_sqrt().into_option() {
+                    let bytes = root.to_bytes();
+                    buf[0..48].copy_from_slice(&bytes);
                     buf[48] = 1; // Set the flag to 1 indicating the result is valid
-                });
-                hint_slice(&buf);
+
+                    hint_slice(&buf);
+                } else {
+                    let has_root = self * nqr;
+                    let root = has_root.cpu_sqrt().unwrap();
+
+                    let bytes = root.to_bytes();
+                    buf[0..48].copy_from_slice(&bytes);
+                    buf[48] = 0; // Set the flag to 0 indicating the result is invalid
+                }
+
             }
 
             let byte_vec = read_vec();
             let bytes: [u8; 49] = byte_vec.try_into().unwrap();
             match bytes[48] {
-                0 => CtOption::new(Fp::zero(), Choice::from(0u8)), // Return None if the flag is 0
+                0 => {
+                    let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+
+                    assert!(root * root == *self * nqr);
+
+                    CtOption::new(Fp::zero(), Choice::from(0u8))
+                }
                 _ => {
                     let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
-                    CtOption::new(root, !self.is_zero() & (root * root).ct_eq(self))
+
+                    assert!(root * root == *self);
+
+                    CtOption::new(root, Choice::from(1u8))
                 }
             }
         }
+
         #[cfg(not(target_os = "zkvm"))]
-        {
-            self.cpu_sqrt()
-        }
+        self.cpu_sqrt()
     }
 
     #[inline]
@@ -427,30 +457,30 @@ impl Fp {
     pub fn invert(&self) -> CtOption<Self> {
         #[cfg(target_os = "zkvm")]
         {
-            // Compute the inverse using the zkvm syscall
+            if self.is_zero().into() {
+                return CtOption::new(Self::zero(), Choice::from(0u8));
+            }
+
+            // The element was previously checked to be non-zero, so we assume its inverse exists.
             unconstrained! {
-                let mut buf = [0u8; 49];
-                self.cpu_invert().map(|inv| {
-                    buf[0..48].copy_from_slice(&inv.to_bytes());
-                    buf[48] = 1;
-                });
-                hint_slice(&buf);
+                if let Some(inv) = self.cpu_invert().into_option() {
+                    let bytes = inv.to_bytes();
+
+                    hint_slice(&bytes);
+                } else {
+                    unreachable!();
+                }
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 49] = byte_vec.try_into().unwrap();
-            match bytes[48] {
-                0 => CtOption::new(Fp::zero(), Choice::from(0u8)),
-                _ => {
-                    let inv = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
-                    CtOption::new(inv, !self.is_zero() & (self * inv).ct_eq(&Fp::one()))
-                }
-            }
+            let bytes: [u8; 48] = byte_vec.try_into().unwrap();
+
+            let inv = Fp::from_bytes(&bytes).unwrap();
+            CtOption::new(inv, (self * inv).ct_eq(&Fp::one()))
         }
+
         #[cfg(not(target_os = "zkvm"))]
-        {
-            self.cpu_invert()
-        }
+        self.cpu_invert()
     }
 
     #[inline]
@@ -1238,6 +1268,25 @@ fn test_lexicographic_largest() {
         ])
         .lexicographically_largest()
     ));
+}
+
+#[test]
+fn test_nqr() {
+    let buf = {
+        let mut buf = [0u8; 48];
+        buf[47] = 0x02;
+        buf
+    };
+    let nqr = Fp::from_bytes(&buf).unwrap();
+
+    for _ in 0..100 {
+        let a = Fp::random(&mut rand::thread_rng());
+        if a.sqrt().is_none().into() {
+            let has_root = a * nqr;
+
+            assert!(bool::from(has_root.sqrt().is_some()));
+        }
+    }
 }
 
 #[cfg(feature = "zeroize")]

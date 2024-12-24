@@ -1,18 +1,22 @@
 //! This module implements arithmetic over the quadratic extension field Fp2.
 
-use cfg_if::cfg_if;
 use core::fmt;
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::Fp;
-cfg_if! {
-    if #[cfg(target_os = "zkvm")] {
-        use sp1_lib::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod };
-        use sp1_lib::{io::{hint_slice, read_vec}, unconstrained};
-    }
-}
+
+#[cfg(target_os = "zkvm")]
+use {
+    sp1_lib::{
+        io::{hint_slice, read_vec},
+        unconstrained,
+    },
+    sp1_lib::{
+        syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_mulmod, syscall_bls12381_fp2_submod,
+    },
+};
 
 #[derive(Copy, Clone)]
 #[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
@@ -512,29 +516,72 @@ impl Fp2 {
 
     #[inline]
     pub fn sqrt(&self) -> CtOption<Self> {
-        // #[cfg(target_os = "zkvm")]
-        // {
-        //     // Compute the inverse using the zkvm syscall
-        //     unconstrained! {
-        //         let mut buf = [0u8; 97];
-        //         self.cpu_sqrt().map(|sqrt| {
-        //             buf[..96].copy_from_slice(&sqrt.to_bytes());
-        //             buf[96] = 1;
-        //         });
-        //         hint_slice(&buf);
-        //     }
+        #[cfg(target_os = "zkvm")]
+        {
+            if self.is_zero().into() {
+                return CtOption::new(Fp2::zero(), Choice::from(1u8));
+            }
 
-        //     let byte_vec = read_vec();
-        //     let bytes: [u8; 97] = byte_vec.try_into().unwrap();
-        //     match bytes[96] {
-        //         0 => CtOption::new(Fp2::zero(), Choice::from(0u8)),
-        //         _ => {
-        //             let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
-        //             CtOption::new(root, !self.is_zero() & (root * root).ct_eq(self))
-        //         }
-        //     }
-        // }
-        // #[cfg(not(target_os = "zkvm"))]
+            // { c0: 1, c1: 1 }
+            let nqr = Self {
+                c0: Fp::from_raw_unchecked([
+                    8505329371266088957,
+                    17002214543764226050,
+                    6865905132761471162,
+                    8632934651105793861,
+                    6631298214892334189,
+                    1582556514881692819,
+                ]),
+                c1: Fp::from_raw_unchecked([
+                    8505329371266088957,
+                    17002214543764226050,
+                    6865905132761471162,
+                    8632934651105793861,
+                    6631298214892334189,
+                    1582556514881692819,
+                ]),
+            };
+
+            // Try to compute the square root of the element
+            //
+            // or we hint in sqrt(nqr * self)
+            unconstrained! {
+               let mut buf = [0u8; 97];
+
+               if let Some(root) = self.sqrt().into_option() {
+                   let bytes = root.to_bytes();
+                   buf[..96].copy_from_slice(&bytes);
+                   buf[96] = 1;
+
+                   hint_slice(&buf);
+               } else {
+                    let has_root = self * nqr;
+                    let root = has_root.sqrt().unwrap();
+
+                    buf[..96].copy_from_slice(&root.to_bytes());
+                    buf[96] = 0;
+                }
+            }
+
+            let byte_vec = read_vec();
+            let bytes: [u8; 97] = byte_vec.try_into().unwrap();
+            match bytes[96] {
+                0 => {
+                    let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
+                    let has_root = self * nqr;
+
+                    assert_eq!(root * root, has_root);
+
+                    CtOption::new(Self::zero(), Choice::from(0u8))
+                }
+                _ => {
+                    let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
+                    CtOption::new(root, (root * root).ct_eq(self))
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "zkvm"))]
         {
             self.cpu_sqrt()
         }
@@ -568,32 +615,32 @@ impl Fp2 {
     }
 
     pub fn invert(&self) -> CtOption<Self> {
+        if self.is_zero().into() {
+            return CtOption::new(Fp2::zero(), Choice::from(0u8));
+        }
+
         #[cfg(target_os = "zkvm")]
         {
-            // Compute the inverse using the zkvm syscall
             unconstrained! {
-                let mut buf = [0u8; 97];
-                self.cpu_invert().map(|inv| {
-                    buf[..96].copy_from_slice(&inv.to_bytes());
-                    buf[96] = 1;
-                });
-                hint_slice(&buf);
+                // The element was previously checked to be non-zero
+                if let Some(inv) = self.cpu_invert().into_option() {
+                    let bytes = inv.to_bytes();
+
+                    hint_slice(&bytes);
+                } else {
+                    unreachable!();
+                }
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 97] = byte_vec.try_into().unwrap();
-            match bytes[96] {
-                0 => CtOption::new(Fp2::zero(), Choice::from(0u8)),
-                _ => {
-                    let inv = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
-                    CtOption::new(inv, !self.is_zero() & (self * inv).ct_eq(&Fp2::one()))
-                }
-            }
+            let bytes: [u8; 96] = byte_vec.try_into().unwrap();
+            let inv = Fp2::from_bytes(&bytes).unwrap();
+
+            CtOption::new(inv, (self * inv).ct_eq(&Fp2::one()))
         }
+
         #[cfg(not(target_os = "zkvm"))]
-        {
-            self.cpu_invert()
-        }
+        self.cpu_invert()
     }
 
     fn pow_vartime_constrained(&self, by: &[u64; 6]) -> Self {
@@ -1176,6 +1223,45 @@ fn test_lexicographic_largest() {
         }
         .lexicographically_largest()
     ));
+}
+
+#[test]
+fn test_fp2_nqr() {
+    // { c0: 1, c1: 1 }
+    let nqr = Fp2 {
+        c0: Fp::from_raw_unchecked([
+            8505329371266088957,
+            17002214543764226050,
+            6865905132761471162,
+            8632934651105793861,
+            6631298214892334189,
+            1582556514881692819,
+        ]),
+        c1: Fp::from_raw_unchecked([
+            8505329371266088957,
+            17002214543764226050,
+            6865905132761471162,
+            8632934651105793861,
+            6631298214892334189,
+            1582556514881692819,
+        ]),
+    };
+
+    println!("c0: {:?}", nqr.c0.0);
+    println!("c1: {:?}", nqr.c1.0);
+
+    assert!(bool::from(nqr.sqrt().is_none()));
+
+    for _ in 0..100 {
+        let a = Fp2::random(&mut rand::thread_rng());
+        if a.sqrt().is_some().into() {
+            continue;
+        }
+
+        let b = a * nqr;
+
+        assert!(bool::from(b.sqrt().is_some()));
+    }
 }
 
 #[cfg(feature = "zeroize")]

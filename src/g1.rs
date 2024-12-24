@@ -341,7 +341,7 @@ impl G1Affine {
                 let decompressed = decompress_pubkey(bytes).unwrap();
 
                 // Extra checks do not have to be done because because the precompile already does it for us.
-                G1Affine::from_uncompressed_unchecked(&decompressed)
+                G1Affine::from_uncompressed_unchecked(&decompressed).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             } else {
                 Self::from_compressed_unchecked(bytes).and_then(|p| CtOption::new(p, p.is_torsion_free()))
             }

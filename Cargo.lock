@@ -818,6 +818,7 @@ dependencies = [
  "group",
  "hex",
  "pairing",
+ "rand",
  "rand_core",
  "rand_xorshift",
  "sha2",
