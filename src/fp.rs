@@ -401,10 +401,8 @@ impl Fp {
                     let bytes = root.to_bytes();
                     buf[0..48].copy_from_slice(&bytes);
                     buf[48] = 1; // Set the flag to 1 indicating the result is valid
-
-                    hint_slice(&buf);
                 } else {
-                    let has_root = self * nqr;
+                    let has_root = self.cpu_mul(&nqr);
                     let root = has_root.cpu_sqrt().unwrap();
 
                     let bytes = root.to_bytes();
@@ -412,6 +410,7 @@ impl Fp {
                     buf[48] = 0; // Set the flag to 0 indicating the result is invalid
                 }
 
+                hint_slice(&buf);
             }
 
             let byte_vec = read_vec();
