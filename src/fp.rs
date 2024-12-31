@@ -635,8 +635,7 @@ impl Fp {
     /// Implements Algorithm 2 from Patrick Longa's
     /// [ePrint 2022-367](https://eprint.iacr.org/2022/367) §3.
     #[inline]
-    #[cfg(not(target_os = "zkvm"))]
-    pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
+    pub(crate) fn sum_of_products_cpu<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         // For a single `a x b` multiplication, operand scanning (schoolbook) takes each
         // limb of `a` in turn, and multiplies it by all of the limbs of `b` to compute
         // the result as a double-width intermediate representation, which is then fully

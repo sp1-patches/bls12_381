@@ -336,8 +336,8 @@ impl Fp2 {
         // Each of these is a "sum of products", which we can compute efficiently.
 
         Fp2 {
-            c0: Fp::sum_of_products([self.c0, self.c1.cpu_neg()], [rhs.c0, rhs.c1]),
-            c1: Fp::sum_of_products([self.c0, self.c1], [rhs.c1, rhs.c0]),
+            c0: Fp::sum_of_products_cpu([self.c0, self.c1.cpu_neg()], [rhs.c0, rhs.c1]),
+            c1: Fp::sum_of_products_cpu([self.c0, self.c1], [rhs.c1, rhs.c0]),
         }
     }
 
@@ -547,7 +547,7 @@ impl Fp2 {
             // or we hint in sqrt(nqr * self)
             unconstrained! {
                let mut buf = [0u8; 97];
-
+                
                if let Some(root) = self.cpu_sqrt().into_option() {
                    let bytes = root.to_bytes();
                    buf[..96].copy_from_slice(&bytes);
