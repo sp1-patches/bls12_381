@@ -548,19 +548,19 @@ impl Fp2 {
             unconstrained! {
                let mut buf = [0u8; 97];
 
-               if let Some(root) = self.sqrt().into_option() {
+               if let Some(root) = self.cpu_sqrt().into_option() {
                    let bytes = root.to_bytes();
                    buf[..96].copy_from_slice(&bytes);
                    buf[96] = 1;
-
-                   hint_slice(&buf);
                } else {
-                    let has_root = self * nqr;
-                    let root = has_root.sqrt().unwrap();
+                    let has_root = self.cpu_mul(&nqr);
+                    let root = has_root.cpu_sqrt().unwrap();
 
                     buf[..96].copy_from_slice(&root.to_bytes());
                     buf[96] = 0;
                 }
+
+                hint_slice(&buf);
             }
 
             let byte_vec = read_vec();
