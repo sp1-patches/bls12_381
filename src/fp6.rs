@@ -349,31 +349,31 @@ impl Fp6 {
 
                 Fp6 {
                     c0: Fp2 {
-                        c0: Fp::sum_of_products(
+                        c0: Fp::sum_of_products_cpu(
                             [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
                             [b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21, b10_m_b11, b10_p_b11],
                         ),
-                        c1: Fp::sum_of_products(
+                        c1: Fp::sum_of_products_cpu(
                             [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
                             [b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21, b10_p_b11, b10_m_b11],
                         ),
                     },
                     c1: Fp2 {
-                        c0: Fp::sum_of_products(
+                        c0: Fp::sum_of_products_cpu(
                             [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
                             [b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21],
                         ),
-                        c1: Fp::sum_of_products(
+                        c1: Fp::sum_of_products_cpu(
                             [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
                             [b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21],
                         ),
                     },
                     c2: Fp2 {
-                        c0: Fp::sum_of_products(
+                        c0: Fp::sum_of_products_cpu(
                             [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
                             [b.c2.c0, b.c2.c1, b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1],
                         ),
-                        c1: Fp::sum_of_products(
+                        c1: Fp::sum_of_products_cpu(
                             [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
                             [b.c2.c1, b.c2.c0, b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0],
                         ),
@@ -431,6 +431,7 @@ impl Fp6 {
     }
 
     #[inline]
+    // This function panics when the input is non-canonical, unlike `Fp`'s `from_bytes`.
     pub fn from_bytes(bytes: &[u8; 288]) -> CtOption<Fp6> {
         let c0 = Fp2::from_bytes(&bytes[..96].try_into().unwrap());
         let c1 = Fp2::from_bytes(&bytes[96..192].try_into().unwrap());

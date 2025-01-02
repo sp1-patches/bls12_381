@@ -234,6 +234,7 @@ impl Fp2 {
     }
 
     #[inline]
+    // This function panics when the input is non-canonical, unlike `Fp`'s `from_bytes`.
     pub fn from_bytes(bytes: &[u8; 96]) -> CtOption<Fp2> {
         let c0 = Fp::from_bytes(&bytes[..48].try_into().unwrap());
         let c1 = Fp::from_bytes(&bytes[48..].try_into().unwrap());

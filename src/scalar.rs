@@ -540,23 +540,21 @@ impl Scalar {
     pub fn invert(&self) -> CtOption<Self> {
         #[cfg(target_os = "zkvm")]
         {
+            if self.is_zero().into() {
+                return CtOption::new(Self::zero(), Choice::from(0u8));
+            }
             unconstrained! {
-                let mut buf = [0u8; 33];
+                let mut buf = [0u8; 32];
                 self.cpu_invert().map(|inv| {
                     buf[0..32].copy_from_slice(&inv.to_bytes());
-                    buf[32] = 1;
                 });
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
-            let bytes: [u8; 33] = byte_vec.try_into().unwrap();
-            match bytes[32] {
-                0 => CtOption::new(Scalar::zero(), Choice::from(0u8)),
-                _ => {
-                    let inv = Scalar::from_bytes(&bytes[0..32].try_into().unwrap()).unwrap();
-                    CtOption::new(inv, (self * inv).ct_eq(&Scalar::one()))
-                }
-            }
+            let bytes: [u8; 32] = byte_vec.try_into().unwrap();
+            let inv = Scalar::from_bytes(&bytes).unwrap();
+            assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");
+            return CtOption::new(inv, Choice::from(1u8));
         }
         #[cfg(not(target_os = "zkvm"))]
         {

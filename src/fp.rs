@@ -283,9 +283,7 @@ impl Fp {
         // that (2^384 - 1)*c is an acceptable product for the reduction. Therefore, the
         // reduction always works so long as `c` is in the field; in this case it is either the
         // constant `R2` or `R3`.
-        limbs[6] %= MODULUS[5];
         let d1 = Fp([limbs[11], limbs[10], limbs[9], limbs[8], limbs[7], limbs[6]]);
-        limbs[0] %= MODULUS[5];
         let d0 = Fp([limbs[5], limbs[4], limbs[3], limbs[2], limbs[1], limbs[0]]);
         // Convert to Montgomery form
         d0 * R2 + d1 * R3
