@@ -538,7 +538,7 @@ impl Scalar {
     }
 
     pub fn invert(&self) -> CtOption<Self> {
-        #[cfg(target_os = "zkvm")]
+        //#[cfg(target_os = "zkvm")]
         {
             if self.is_zero().into() {
                 return CtOption::new(Self::zero(), Choice::from(0u8));
@@ -551,8 +551,16 @@ impl Scalar {
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
-            let bytes: [u8; 32] = byte_vec.try_into().unwrap();
-            let inv = Scalar::from_bytes(&bytes).unwrap();
+
+            // Saftey: 
+            //
+            // - The byte_vec is guaranteed to be 32 bytes long because we just pushed it,
+            // and the executor always pushes to the front of the input buffer.
+            //
+            // `from_scalar` just clones the bytes before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8;32]) }; 
+            let inv = Scalar::from_bytes(bytes).unwrap();
+
             assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");
             return CtOption::new(inv, Choice::from(1u8));
         }

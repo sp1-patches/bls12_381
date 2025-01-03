@@ -565,8 +565,15 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 97] = byte_vec.try_into().unwrap();
-            match bytes[96] {
+            let status = byte_vec[96];
+
+            // Safety:
+            // - the length of the byte_vec is guaranteed to be 97, since we just pushed it.
+            // - the executor pushes to the front.
+            // - the ref is only cloned from before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
+
+            match status {
                 0 => {
                     let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
                     let has_root = self * nqr;
@@ -634,8 +641,13 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 96] = byte_vec.try_into().unwrap();
-            let inv = Fp2::from_bytes(&bytes).unwrap();
+
+            // Safety: 
+            // - the length of the byte_vec is guaranteed to be 48, since we just pushed it.
+            // - the executor pushes to the front.
+            // - the ref is only cloned from before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
+            let inv = Fp2::from_bytes(bytes).unwrap();
 
             CtOption::new(inv, (self * inv).ct_eq(&Fp2::one()))
         }

@@ -46,20 +46,22 @@ impl zeroize::DefaultIsZeroes for Fp {}
 
 impl ConstantTimeEq for Fp {
     fn ct_eq(&self, other: &Self) -> Choice {
-          self.0[0].ct_eq(&other.0[0]) & self.0[1].ct_eq(&other.0[1]) & self.0[2].ct_eq(&other.0[2])
-              & self.0[3].ct_eq(&other.0[3])
-              & self.0[4].ct_eq(&other.0[4])
-              & self.0[5].ct_eq(&other.0[5])
+        self.0[0].ct_eq(&other.0[0])
+            & self.0[1].ct_eq(&other.0[1])
+            & self.0[2].ct_eq(&other.0[2])
+            & self.0[3].ct_eq(&other.0[3])
+            & self.0[4].ct_eq(&other.0[4])
+            & self.0[5].ct_eq(&other.0[5])
     }
 }
 
- impl Eq for Fp {}
- impl PartialEq for Fp {
-     #[inline]
-     fn eq(&self, other: &Self) -> bool {
-         bool::from(self.ct_eq(other))
-     }
- }
+impl Eq for Fp {}
+impl PartialEq for Fp {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        bool::from(self.ct_eq(other))
+    }
+}
 
 impl ConditionallySelectable for Fp {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
@@ -410,17 +412,24 @@ impl Fp {
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 49] = byte_vec.try_into().unwrap();
-            match bytes[48] {
+            let status = byte_vec[48];
+
+            // Safety:
+            // - the length of the byte_vec is guaranteed to be 49, since we just pushed it.
+            // - the executor pushes to the front.
+            // - the ref is only cloned from before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 48]) };
+
+            match status {
                 0 => {
-                    let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                    let root = Fp::from_bytes(bytes).unwrap();
 
                     assert!(root * root == *self * nqr);
 
                     CtOption::new(Fp::zero(), Choice::from(0u8))
                 }
                 _ => {
-                    let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                    let root = Fp::from_bytes(bytes).unwrap();
 
                     assert!(root * root == *self);
 
@@ -468,9 +477,17 @@ impl Fp {
             }
 
             let byte_vec = read_vec();
-            let bytes: [u8; 48] = byte_vec.try_into().unwrap();
 
-            let inv = Fp::from_bytes(&bytes).unwrap();
+            // Safety:
+            // - the length of the byte_vec is guaranteed to be 48, since we just pushed it.
+            // - the executor pushes to the front.
+            // - the ref is only cloned from before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 48]) };
+
+            let inv = Fp::from_bytes(bytes).unwrap();
+
+            assert!(self * &inv == Fp::one(), "Invalid hint: Fp invert");
+
             CtOption::new(inv, (self * inv).ct_eq(&Fp::one()))
         }
 
