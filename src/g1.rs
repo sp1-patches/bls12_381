@@ -481,6 +481,9 @@ impl G1Affine {
     
     #[inline(always)]
     pub fn double(mut self) -> Self {
+        if self.is_identity().into() {
+            return self;
+        }
         cfg_if::cfg_if! {
             if #[cfg(target_os = "zkvm")] {
                 self.x.mul_r_inv_internal();
