@@ -478,6 +478,26 @@ impl G1Affine {
             }
         }
     }
+    
+    #[inline(always)]
+    pub fn double(mut self) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                self.x.mul_r_inv_internal();
+                self.y.mul_r_inv_internal();
+                unsafe {
+                    syscall_bls12381_double(self.x.0.as_mut_ptr() as *mut [u32; 24]);
+                }
+                self.x.mul_r_internal();
+                self.y.mul_r_internal();
+                self
+            } else {
+                let proj = G1Projective::from(self);
+                let res = proj.double();
+                G1Affine::from(res)
+            }
+        }
+    } 
 }
 
 /// A nontrivial third root of unity in Fp
@@ -837,6 +857,7 @@ impl G1Projective {
     }
 
     /// Multiply `self` by `crate::BLS_X`, using double and add.
+    #[cfg(not(target_os = "zkvm"))]
     fn mul_by_x(&self) -> G1Projective {
         let mut xself = G1Projective::identity();
         // NOTE: in BLS12-381 we can just skip the first bit.
@@ -855,6 +876,27 @@ impl G1Projective {
             xself = -xself;
         }
         xself
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn mul_by_x(&self) -> G1Projective {
+        let mut xself = G1Affine::identity();
+
+        let mut x = crate::BLS_X >> 1;
+        let mut tmp = G1Affine::from(*self);
+        while x != 0 {
+            tmp = tmp.double();
+
+            if x % 2 == 1 {
+                xself = xself.add_affine(&tmp);
+            }
+            x >>= 1;
+        }
+        // finally, flip the sign
+        if crate::BLS_X_IS_NEGATIVE {
+            xself = -xself;
+        }
+        xself.into()
     }
 
     /// Multiplies by $(1 - z)$, where $z$ is the parameter of BLS12-381, which

@@ -46,22 +46,20 @@ impl zeroize::DefaultIsZeroes for Fp {}
 
 impl ConstantTimeEq for Fp {
     fn ct_eq(&self, other: &Self) -> Choice {
-        self.0[0].ct_eq(&other.0[0])
-            & self.0[1].ct_eq(&other.0[1])
-            & self.0[2].ct_eq(&other.0[2])
-            & self.0[3].ct_eq(&other.0[3])
-            & self.0[4].ct_eq(&other.0[4])
-            & self.0[5].ct_eq(&other.0[5])
+          self.0[0].ct_eq(&other.0[0]) & self.0[1].ct_eq(&other.0[1]) & self.0[2].ct_eq(&other.0[2])
+              & self.0[3].ct_eq(&other.0[3])
+              & self.0[4].ct_eq(&other.0[4])
+              & self.0[5].ct_eq(&other.0[5])
     }
 }
 
-impl Eq for Fp {}
-impl PartialEq for Fp {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        bool::from(self.ct_eq(other))
-    }
-}
+ impl Eq for Fp {}
+ impl PartialEq for Fp {
+     #[inline]
+     fn eq(&self, other: &Self) -> bool {
+         bool::from(self.ct_eq(other))
+     }
+ }
 
 impl ConditionallySelectable for Fp {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
