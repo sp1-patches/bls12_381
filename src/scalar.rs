@@ -538,7 +538,7 @@ impl Scalar {
     }
 
     pub fn invert(&self) -> CtOption<Self> {
-        //#[cfg(target_os = "zkvm")]
+        #[cfg(target_os = "zkvm")]
         {
             if self.is_zero().into() {
                 return CtOption::new(Self::zero(), Choice::from(0u8));
@@ -552,7 +552,7 @@ impl Scalar {
             }
             let byte_vec = read_vec();
 
-            // Saftey: 
+            // Safety: 
             //
             // - The byte_vec is guaranteed to be 32 bytes long because we just pushed it,
             // and the executor always pushes to the front of the input buffer.
