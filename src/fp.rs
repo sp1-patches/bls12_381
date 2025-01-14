@@ -267,7 +267,7 @@ impl Fp {
     }
 
     /// Reduces a big-endian 64-bit limb representation of a 768-bit number.
-    fn from_u768(mut limbs: [u64; 12]) -> Fp {
+    fn from_u768(limbs: [u64; 12]) -> Fp {
         // We reduce an arbitrary 768-bit number by decomposing it into two 384-bit digits
         // with the higher bits multiplied by 2^384. Thus, we perform two reductions
         //
@@ -389,45 +389,26 @@ impl Fp {
             })
             .unwrap();
 
-            // Compute the square root using the zkvm syscall
-            unconstrained! {
-                let mut buf = [0u8; 49]; // Allocate 49 bytes to include the flag
-
-                if let Some(root) = self.cpu_sqrt().into_option() {
-                    let bytes = root.to_bytes();
-                    buf[0..48].copy_from_slice(&bytes);
-                    buf[48] = 1; // Set the flag to 1 indicating the result is valid
-                } else {
-                    let has_root = self.cpu_mul(&nqr);
-                    let root = has_root.cpu_sqrt().unwrap();
-
-                    let bytes = root.to_bytes();
-                    buf[0..48].copy_from_slice(&bytes);
-                    buf[48] = 0; // Set the flag to 0 indicating the result is invalid
-                }
-
-                hint_slice(&buf);
+            // Use a hook to see if we can decompress with the syscall. 
+            sp1_lib::unconstrained! {
+                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_SQRT, &self.to_bytes()); 
             }
 
-            let byte_vec = read_vec();
-            let status = byte_vec[48];
-
-            // Safety:
-            // - the length of the byte_vec is guaranteed to be 49, since we just pushed it.
-            // - the executor pushes to the front.
-            // - the ref is only cloned from before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 48]) };
+            // The first byte is the status of the sqrt syscall.
+            let status = read_vec()[0];
+            // Assert the hook only writes back 48 bytes.
+            let byte_vec = read_vec().try_into().unwrap();
 
             match status {
                 0 => {
-                    let root = Fp::from_bytes(bytes).unwrap();
+                    let root = Fp::from_bytes(&byte_vec).unwrap();
 
                     assert!(root * root == *self * nqr, "Invalid hint: Fp sqrt, non-quadratic residue");
 
                     CtOption::new(Fp::zero(), Choice::from(0u8))
                 }
                 _ => {
-                    let root = Fp::from_bytes(bytes).unwrap();
+                    let root = Fp::from_bytes(&byte_vec).unwrap();
 
                     assert!(root * root == *self, "Invalid hint: Fp sqrt");
 
@@ -463,26 +444,13 @@ impl Fp {
                 return CtOption::new(Self::zero(), Choice::from(0u8));
             }
 
-            // The element was previously checked to be non-zero, so we assume its inverse exists.
             unconstrained! {
-                if let Some(inv) = self.cpu_invert().into_option() {
-                    let bytes = inv.to_bytes();
-
-                    hint_slice(&bytes);
-                } else {
-                    unreachable!();
-                }
+                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_INVERSE, &self.to_bytes()); 
             }
 
-            let byte_vec = read_vec();
+            let byte_vec = read_vec().try_into().unwrap();
 
-            // Safety: 
-            // - the length of the byte_vec is guaranteed to be 48, since we just pushed it.
-            // - the executor pushes to the front.
-            // - the ref is only cloned from before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 48]) };
-
-            let inv = Fp::from_bytes(bytes).unwrap();
+            let inv = Fp::from_bytes(&byte_vec).unwrap();
             
             assert!(self * &inv == Fp::one(), "Invalid hint: Fp invert");
 
