@@ -76,16 +76,8 @@ features = ["alloc"]
 optional = true
 
 [target.'cfg(target_os = "zkvm")'.dependencies.sp1-lib]
-version = "4.0.0-rc.11"
+version = "4.0.0"
 default-features = false
-
-# [dependencies.sp1-lib]
-# version = "4.0.0-rc.11"
-# default-features = false
-
-# Temp patch
-[patch.crates-io]
-sp1-lib = { git = "https://github.com/succinctlabs/sp1-wip.git", branch = "n/bls-hook" }
 
 [features]
 default = ["groups", "pairings", "alloc", "bits"]
