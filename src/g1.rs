@@ -480,26 +480,34 @@ impl G1Affine {
     }
     
     #[inline(always)]
+    #[cfg(target_os = "zkvm")]
     pub fn double(mut self) -> Self {
         if self.is_identity().into() {
             return self;
         }
-        cfg_if::cfg_if! {
-            if #[cfg(target_os = "zkvm")] {
-                self.x.mul_r_inv_internal();
-                self.y.mul_r_inv_internal();
-                unsafe {
-                    syscall_bls12381_double(self.x.0.as_mut_ptr() as *mut [u32; 24]);
-                }
-                self.x.mul_r_internal();
-                self.y.mul_r_internal();
-                self
-            } else {
-                let proj = G1Projective::from(self);
-                let res = proj.double();
-                G1Affine::from(res)
-            }
+
+        self.x.mul_r_inv_internal();
+        self.y.mul_r_inv_internal();
+        unsafe {
+            syscall_bls12381_double(self.x.0.as_mut_ptr() as *mut [u32; 24]);
         }
+        self.x.mul_r_internal();
+        self.y.mul_r_internal();
+
+        self
+    } 
+
+    #[inline(always)]
+    #[cfg(not(target_os = "zkvm"))]
+    pub fn double(self) -> Self {
+        if self.is_identity().into() {
+            return self;
+        }
+
+        let proj = G1Projective::from(self);
+        let res = proj.double();
+
+        G1Affine::from(res)
     } 
 }
 
