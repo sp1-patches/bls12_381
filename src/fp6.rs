@@ -8,6 +8,12 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
 
+#[cfg(target_os = "zkvm")]
+use sp1_lib::{
+    io::{hint_slice, read_vec},
+    unconstrained,
+};
+
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
 pub struct Fp6 {
     pub c0: Fp2,
@@ -102,12 +108,28 @@ impl Fp6 {
     }
 
     #[cfg(feature = "pairings")]
-    pub(crate) fn random(mut rng: impl RngCore) -> Self {
+    pub fn random(mut rng: impl RngCore) -> Self {
         Fp6 {
             c0: Fp2::random(&mut rng),
             c1: Fp2::random(&mut rng),
             c2: Fp2::random(&mut rng),
         }
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn add_inp(&mut self, rhs: &Fp6) {
+        self.c0.add_inp(&rhs.c0);
+        self.c1.add_inp(&rhs.c1);
+        self.c2.add_inp(&rhs.c2);
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn sub_inp(&mut self, rhs: &Fp6) {
+        self.c0.sub_inp(&rhs.c0);
+        self.c1.sub_inp(&rhs.c1);
+        self.c2.sub_inp(&rhs.c2);
     }
 
     pub fn mul_by_1(&self, c1: &Fp2) -> Fp6 {
@@ -149,6 +171,23 @@ impl Fp6 {
         }
     }
 
+    /// Multiply by quadratic nonresidue v.
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_by_nonresidue_owned(self) -> Self {
+        // Given a + bv + cv^2, this produces
+        //     av + bv^2 + cv^3
+        // but because v^3 = u + 1, we have
+        //     c(u + 1) + av + v^2
+        let Fp6 { c0, c1, mut c2 } = self;
+        c2.mul_by_nonresidue_inp();
+
+        Fp6 {
+            c0: c2,
+            c1: c0,
+            c2: c1,
+        }
+    }
+
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {
@@ -187,89 +226,166 @@ impl Fp6 {
         Fp6 { c0, c1, c2 }
     }
 
+    /// Raises this element to p.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn frobenius_map_inp(&mut self) {
+        self.c0.frobenius_map_inp();
+        self.c1.frobenius_map_inp();
+        self.c2.frobenius_map_inp();
+
+        const C1_MUL: Fp2 = Fp2 {
+            c0: Fp::zero(),
+            c1: Fp::from_raw_unchecked([
+                0xcd03_c9e4_8671_f071,
+                0x5dab_2246_1fcd_a5d2,
+                0x5870_42af_d385_1b95,
+                0x8eb6_0ebe_01ba_cb9e,
+                0x03f9_7d6e_83d0_50d2,
+                0x18f0_2065_5463_8741,
+            ]),
+        };
+
+        const C2_MUL: Fp2 = Fp2 {
+            c0: Fp::from_raw_unchecked([
+                0x890d_c9e4_8675_45c3,
+                0x2af3_2253_3285_a5d5,
+                0x5088_0866_309b_7e2c,
+                0xa20d_1b8c_7e88_1024,
+                0x14e4_f04f_e2db_9068,
+                0x14e5_6d3f_1564_853a,
+            ]),
+            c1: Fp::zero(),
+        };
+
+        // c1 = c1 * (u + 1)^((p - 1) / 3)
+        self.c1.mul_inp(&C1_MUL);
+
+        // c2 = c2 * (u + 1)^((2p - 2) / 3)
+        self.c2.mul_inp(&C2_MUL);
+    }
+
     #[inline(always)]
     pub fn is_zero(&self) -> Choice {
         self.c0.is_zero() & self.c1.is_zero() & self.c2.is_zero()
     }
 
-    /// Returns `c = self * b`.
-    ///
-    /// Implements the full-tower interleaving strategy from
-    /// [ePrint 2022-376](https://eprint.iacr.org/2022/367).
     #[inline]
     fn mul_interleaved(&self, b: &Self) -> Self {
-        // The intuition for this algorithm is that we can look at F_p^6 as a direct
-        // extension of F_p^2, and express the overall operations down to the base field
-        // F_p instead of only over F_p^2. This enables us to interleave multiplications
-        // and reductions, ensuring that we don't require double-width intermediate
-        // representations (with around twice as many limbs as F_p elements).
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                // Implements Algorithm 13 from https://eprint.iacr.org/2010/354.pdf
+                let mut t0 = self.c0;
+                t0.mul_inp(&b.c0);
+                let mut t1 = self.c1;
+                t1.mul_inp(&b.c1);
+                let mut t2 = self.c2;
+                t2.mul_inp(&b.c2);
+                let mut c0 = self.c1;
+                c0.add_inp(&self.c2);
+                let mut tmp = b.c1;
+                tmp.add_inp(&b.c2);
+                c0.mul_inp(&tmp);
+                tmp = t2;
+                tmp.add_inp(&t1);
+                c0.sub_inp(&tmp);
+                c0 = c0.mul_by_nonresidue();
+                c0.add_inp(&t0);
+                let mut c1 = self.c0;
+                c1.add_inp(&self.c1);
+                tmp = b.c0;
+                tmp.add_inp(&b.c1);
+                c1.mul_inp(&tmp);
+                tmp = t0;
+                tmp.add_inp(&t1);
+                c1.sub_inp(&tmp);
+                tmp = t2.mul_by_nonresidue();
+                c1.add_inp(&tmp);
+                tmp = self.c0;
+                tmp.add_inp(&self.c2);
+                let mut c2 = b.c0;
+                c2.add_inp(&b.c2);
+                c2.mul_inp(&tmp);
+                tmp = t0;
+                tmp.add_inp(&t2);
+                c2.sub_inp(&tmp);
+                c2.add_inp(&t1);
+                Fp6 { c0, c1, c2 }
+            } else {
+                // The intuition for this algorithm is that we can look at F_p^6 as a direct
+                // extension of F_p^2, and express the overall operations down to the base field
+                // F_p instead of only over F_p^2. This enables us to interleave multiplications
+                // and reductions, ensuring that we don't require double-width intermediate
+                // representations (with around twice as many limbs as F_p elements).
 
-        // We want to express the multiplication c = a x b, where a = (a_0, a_1, a_2) is
-        // an element of F_p^6, and a_i = (a_i,0, a_i,1) is an element of F_p^2. The fully
-        // expanded multiplication is given by (2022-376 §5):
-        //
-        //   c_0,0 = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1
-        //                                     - a_1,0 b_2,1 - a_1,1 b_2,0 - a_2,0 b_1,1 - a_2,1 b_1,0.
-        //         = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 (b_2,0 - b_2,1) - a_1,1 (b_2,0 + b_2,1)
-        //                                     + a_2,0 (b_1,0 - b_1,1) - a_2,1 (b_1,0 + b_1,1).
-        //
-        //   c_0,1 = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0 b_2,1 + a_1,1 b_2,0 + a_2,0 b_1,1 + a_2,1 b_1,0
-        //                                     + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1.
-        //         = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0(b_2,0 + b_2,1) + a_1,1(b_2,0 - b_2,1)
-        //                                     + a_2,0(b_1,0 + b_1,1) + a_2,1(b_1,0 - b_1,1).
-        //
-        //   c_1,0 = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0 b_2,0 - a_2,1 b_2,1
-        //                                                                 - a_2,0 b_2,1 - a_2,1 b_2,0.
-        //         = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0(b_2,0 - b_2,1)
-        //                                                                 - a_2,1(b_2,0 + b_2,1).
-        //
-        //   c_1,1 = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0 b_2,1 + a_2,1 b_2,0
-        //                                                                 + a_2,0 b_2,0 - a_2,1 b_2,1
-        //         = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0(b_2,0 + b_2,1)
-        //                                                                 + a_2,1(b_2,0 - b_2,1).
-        //
-        //   c_2,0 = a_0,0 b_2,0 - a_0,1 b_2,1 + a_1,0 b_1,0 - a_1,1 b_1,1 + a_2,0 b_0,0 - a_2,1 b_0,1.
-        //   c_2,1 = a_0,0 b_2,1 + a_0,1 b_2,0 + a_1,0 b_1,1 + a_1,1 b_1,0 + a_2,0 b_0,1 + a_2,1 b_0,0.
-        //
-        // Each of these is a "sum of products", which we can compute efficiently.
+                // We want to express the multiplication c = a x b, where a = (a_0, a_1, a_2) is
+                // an element of F_p^6, and a_i = (a_i,0, a_i,1) is an element of F_p^2. The fully
+                // expanded multiplication is given by (2022-376 §5):
+                //
+                //   c_0,0 = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1
+                //                                     - a_1,0 b_2,1 - a_1,1 b_2,0 - a_2,0 b_1,1 - a_2,1 b_1,0.
+                //         = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 (b_2,0 - b_2,1) - a_1,1 (b_2,0 + b_2,1)
+                //                                     + a_2,0 (b_1,0 - b_1,1) - a_2,1 (b_1,0 + b_1,1).
+                //
+                //   c_0,1 = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0 b_2,1 + a_1,1 b_2,0 + a_2,0 b_1,1 + a_2,1 b_1,0
+                //                                     + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1.
+                //         = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0(b_2,0 + b_2,1) + a_1,1(b_2,0 - b_2,1)
+                //                                     + a_2,0(b_1,0 + b_1,1) + a_2,1(b_1,0 - b_1,1).
+                //
+                //   c_1,0 = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0 b_2,0 - a_2,1 b_2,1
+                //                                                                 - a_2,0 b_2,1 - a_2,1 b_2,0.
+                //         = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0(b_2,0 - b_2,1)
+                //                                                                 - a_2,1(b_2,0 + b_2,1).
+                //
+                //   c_1,1 = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0 b_2,1 + a_2,1 b_2,0
+                //                                                                 + a_2,0 b_2,0 - a_2,1 b_2,1
+                //         = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0(b_2,0 + b_2,1)
+                //                                                                 + a_2,1(b_2,0 - b_2,1).
+                //
+                //   c_2,0 = a_0,0 b_2,0 - a_0,1 b_2,1 + a_1,0 b_1,0 - a_1,1 b_1,1 + a_2,0 b_0,0 - a_2,1 b_0,1.
+                //   c_2,1 = a_0,0 b_2,1 + a_0,1 b_2,0 + a_1,0 b_1,1 + a_1,1 b_1,0 + a_2,0 b_0,1 + a_2,1 b_0,0.
+                //
+                // Each of these is a "sum of products", which we can compute efficiently.
 
-        let a = self;
-        let b10_p_b11 = b.c1.c0 + b.c1.c1;
-        let b10_m_b11 = b.c1.c0 - b.c1.c1;
-        let b20_p_b21 = b.c2.c0 + b.c2.c1;
-        let b20_m_b21 = b.c2.c0 - b.c2.c1;
+                let a = self;
+                let b10_p_b11 = b.c1.c0 + b.c1.c1;
+                let b10_m_b11 = b.c1.c0 - b.c1.c1;
+                let b20_p_b21 = b.c2.c0 + b.c2.c1;
+                let b20_m_b21 = b.c2.c0 - b.c2.c1;
 
-        Fp6 {
-            c0: Fp2 {
-                c0: Fp::sum_of_products(
-                    [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
-                    [b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21, b10_m_b11, b10_p_b11],
-                ),
-                c1: Fp::sum_of_products(
-                    [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
-                    [b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21, b10_p_b11, b10_m_b11],
-                ),
-            },
-            c1: Fp2 {
-                c0: Fp::sum_of_products(
-                    [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
-                    [b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21],
-                ),
-                c1: Fp::sum_of_products(
-                    [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
-                    [b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21],
-                ),
-            },
-            c2: Fp2 {
-                c0: Fp::sum_of_products(
-                    [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
-                    [b.c2.c0, b.c2.c1, b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1],
-                ),
-                c1: Fp::sum_of_products(
-                    [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
-                    [b.c2.c1, b.c2.c0, b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0],
-                ),
-            },
+                Fp6 {
+                    c0: Fp2 {
+                        c0: Fp::sum_of_products(
+                            [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
+                            [b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21, b10_m_b11, b10_p_b11],
+                        ),
+                        c1: Fp::sum_of_products(
+                            [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
+                            [b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21, b10_p_b11, b10_m_b11],
+                        ),
+                    },
+                    c1: Fp2 {
+                        c0: Fp::sum_of_products(
+                            [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
+                            [b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1, b20_m_b21, b20_p_b21],
+                        ),
+                        c1: Fp::sum_of_products(
+                            [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
+                            [b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0, b20_p_b21, b20_m_b21],
+                        ),
+                    },
+                    c2: Fp2 {
+                        c0: Fp::sum_of_products(
+                            [a.c0.c0, -a.c0.c1, a.c1.c0, -a.c1.c1, a.c2.c0, -a.c2.c1],
+                            [b.c2.c0, b.c2.c1, b.c1.c0, b.c1.c1, b.c0.c0, b.c0.c1],
+                        ),
+                        c1: Fp::sum_of_products(
+                            [a.c0.c0, a.c0.c1, a.c1.c0, a.c1.c1, a.c2.c0, a.c2.c1],
+                            [b.c2.c1, b.c2.c0, b.c1.c1, b.c1.c0, b.c0.c1, b.c0.c0],
+                        ),
+                    },
+                }
+            }
         }
     }
 
@@ -309,6 +425,32 @@ impl Fp6 {
             c1: t * c1,
             c2: t * c2,
         })
+    }
+
+    #[inline]
+    pub fn to_bytes(&self) -> [u8; 288] {
+        let mut res = [0; 288];
+        res[..96].copy_from_slice(&self.c0.to_bytes());
+        res[96..192].copy_from_slice(&self.c1.to_bytes());
+        res[192..].copy_from_slice(&self.c2.to_bytes());
+        res
+    }
+
+    #[inline]
+    pub fn from_bytes(bytes: &[u8; 288]) -> CtOption<Fp6> {
+        let c0 = Fp2::from_bytes(&bytes[..96].try_into().unwrap());
+        let c1 = Fp2::from_bytes(&bytes[96..192].try_into().unwrap());
+        let c2 = Fp2::from_bytes(&bytes[192..].try_into().unwrap());
+        let is_some = c0.is_some() & c1.is_some() & c2.is_some();
+
+        CtOption::new(
+            Fp6 {
+                c0: c0.unwrap(),
+                c1: c1.unwrap(),
+                c2: c2.unwrap(),
+            },
+            is_some,
+        )
     }
 }
 

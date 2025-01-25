@@ -1,6 +1,7 @@
 //! This module provides an implementation of the BLS12-381 base field `GF(p)`
 //! where `p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
 
+use cfg_if::cfg_if;
 use core::fmt;
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
@@ -8,10 +9,19 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::util::{adc, mac, sbb};
 
+// Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
+cfg_if! {
+    if #[cfg(target_os = "zkvm")] {
+        use sp1_lib::{syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bls12381_fp_mulmod };
+        use sp1_lib::{io::{hint_slice, read_vec}, unconstrained};
+    }
+}
+
 // The internal representation of this type is six 64-bit unsigned
 // integers in little-endian order. `Fp` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod p, with R = 2^384.
 #[derive(Copy, Clone)]
+#[repr(transparent)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct Fp(pub(crate) [u64; 6]);
 
 impl fmt::Debug for Fp {
@@ -78,6 +88,17 @@ const MODULUS: [u64; 6] = [
 
 /// INV = -(p^{-1} mod 2^64) mod 2^64
 const INV: u64 = 0x89f3_fffc_fffc_fffd;
+
+/// R_INV = (2^384)^(-1) mod p
+#[cfg(target_os = "zkvm")]
+const R_INV: Fp = Fp([
+    0xf4d38259380b4820,
+    0x7fe11274d898fafb,
+    0x343ea97914956dc8,
+    0x1797ab1458a88de9,
+    0xed5e64273c4f538b,
+    0x14fec701e8fb0ce9,
+]);
 
 /// R = 2^384 mod p
 const R: Fp = Fp([
@@ -208,7 +229,7 @@ impl Fp {
 
     /// Converts an element of `Fp` into a byte representation in
     /// big-endian byte order.
-    pub fn to_bytes(self) -> [u8; 48] {
+    pub fn to_bytes(&self) -> [u8; 48] {
         // Turn into canonical form by computing
         // (a.R) / R = a
         let tmp = Fp::montgomery_reduce(
@@ -226,7 +247,7 @@ impl Fp {
         res
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Fp {
+    pub fn random(mut rng: impl RngCore) -> Fp {
         let mut bytes = [0u8; 96];
         rng.fill_bytes(&mut bytes);
 
@@ -303,6 +324,21 @@ impl Fp {
         Fp(v)
     }
 
+    /// CPU version of the exponentiation operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_pow_vartime(&self, by: &[u64; 6]) -> Self {
+        let mut res = Self::one();
+        for e in by.iter().rev() {
+            for i in (0..64).rev() {
+                res = res.cpu_mul(&res);
+
+                if ((*e >> i) & 1) == 1 {
+                    res = res.cpu_mul(self);
+                }
+            }
+        }
+        res
+    }
+
     /// Although this is labeled "vartime", it is only
     /// variable time with respect to the exponent. It
     /// is also not exposed in the public API.
@@ -321,13 +357,14 @@ impl Fp {
     }
 
     #[inline]
-    pub fn sqrt(&self) -> CtOption<Self> {
+    /// CPU version of the square-root operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_sqrt(&self) -> CtOption<Self> {
         // We use Shank's method, as p = 3 (mod 4). This means
         // we only need to exponentiate by (p+1)/4. This only
         // works for elements that are actually quadratic residue,
         // so we check that we got the correct result at the end.
 
-        let sqrt = self.pow_vartime(&[
+        let sqrt = self.cpu_pow_vartime(&[
             0xee7f_bfff_ffff_eaab,
             0x07aa_ffff_ac54_ffff,
             0xd9cc_34a8_3dac_3d89,
@@ -336,16 +373,44 @@ impl Fp {
             0x0680_447a_8e5f_f9a6,
         ]);
 
-        CtOption::new(sqrt, sqrt.square().ct_eq(self))
+        CtOption::new(sqrt, sqrt.cpu_square().ct_eq(self))
     }
 
     #[inline]
-    /// Computes the multiplicative inverse of this field
-    /// element, returning None in the case that this element
-    /// is zero.
-    pub fn invert(&self) -> CtOption<Self> {
+    pub fn sqrt(&self) -> CtOption<Self> {
+        #[cfg(target_os = "zkvm")]
+        {
+            // Compute the square root using the zkvm syscall
+            unconstrained! {
+                let mut buf = [0u8; 49]; // Allocate 49 bytes to include the flag
+                self.cpu_sqrt().map(|root| {
+                    buf[0..48].copy_from_slice(&root.to_bytes());
+                    buf[48] = 1; // Set the flag to 1 indicating the result is valid
+                });
+                hint_slice(&buf);
+            }
+
+            let byte_vec = read_vec();
+            let bytes: [u8; 49] = byte_vec.try_into().unwrap();
+            match bytes[48] {
+                0 => CtOption::new(Fp::zero(), Choice::from(0u8)), // Return None if the flag is 0
+                _ => {
+                    let root = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                    CtOption::new(root, !self.is_zero() & (root * root).ct_eq(self))
+                }
+            }
+        }
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            self.cpu_sqrt()
+        }
+    }
+
+    #[inline]
+    /// CPU version of the inversion operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_invert(&self) -> CtOption<Self> {
         // Exponentiate by p - 2
-        let t = self.pow_vartime(&[
+        let inv = self.cpu_pow_vartime(&[
             0xb9fe_ffff_ffff_aaa9,
             0x1eab_fffe_b153_ffff,
             0x6730_d2a0_f6b0_f624,
@@ -354,7 +419,36 @@ impl Fp {
             0x1a01_11ea_397f_e69a,
         ]);
 
-        CtOption::new(t, !self.is_zero())
+        CtOption::new(inv, !self.is_zero())
+    }
+
+    pub fn invert(&self) -> CtOption<Self> {
+        #[cfg(target_os = "zkvm")]
+        {
+            // Compute the inverse using the zkvm syscall
+            unconstrained! {
+                let mut buf = [0u8; 49];
+                self.cpu_invert().map(|inv| {
+                    buf[0..48].copy_from_slice(&inv.to_bytes());
+                    buf[48] = 1;
+                });
+                hint_slice(&buf);
+            }
+
+            let byte_vec = read_vec();
+            let bytes: [u8; 49] = byte_vec.try_into().unwrap();
+            match bytes[48] {
+                0 => CtOption::new(Fp::zero(), Choice::from(0u8)),
+                _ => {
+                    let inv = Fp::from_bytes(&bytes[0..48].try_into().unwrap()).unwrap();
+                    CtOption::new(inv, !self.is_zero() & (self * inv).ct_eq(&Fp::one()))
+                }
+            }
+        }
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            self.cpu_invert()
+        }
     }
 
     #[inline]
@@ -379,7 +473,19 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn add(&self, rhs: &Fp) -> Fp {
+    #[cfg(target_os = "zkvm")]
+    pub fn add_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_addmod(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
+    }
+
+    #[inline]
+    /// CPU version of the addition operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_add(&self, rhs: &Fp) -> Fp {
         let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
         let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
         let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
@@ -393,7 +499,22 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn neg(&self) -> Fp {
+    pub fn add(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_addmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                self.cpu_add(rhs)
+            }
+        }
+    }
+
+    /// CPU version of the negation operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_neg(&self) -> Fp {
         let (d0, borrow) = sbb(MODULUS[0], self.0[0], 0);
         let (d1, borrow) = sbb(MODULUS[1], self.0[1], borrow);
         let (d2, borrow) = sbb(MODULUS[2], self.0[2], borrow);
@@ -418,8 +539,64 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn sub(&self, rhs: &Fp) -> Fp {
-        (&rhs.neg()).add(self)
+    pub fn neg(&self) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = Fp::zero();
+                unsafe {
+                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                self.cpu_neg()
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn sub_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_submod(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
+    }
+
+    #[inline]
+    pub fn sub(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out
+            } else {
+                (&rhs.neg()).add(self)
+            }
+        }
+    }
+
+    #[inline]
+    /// CPU version of the subtraction operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_sub(&self, rhs: &Fp) -> Fp {
+        self.cpu_add(&rhs.cpu_neg())
+    }
+
+    /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
+    ///
+    /// Uses precompiles to calculate it naively but much more cheaply.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn sum_of_products<const T: usize>(mut a: [Fp; T], b: [Fp; T]) -> Fp {
+        let mut out = Fp::zero();
+        for (ai, bi) in a.iter_mut().zip(b.iter()) {
+            ai.mul_inp(bi);
+            out.add_inp(ai);
+        }
+        out
     }
 
     /// Returns `c = a.zip(b).fold(0, |acc, (a_i, b_i)| acc + a_i * b_i)`.
@@ -427,6 +604,7 @@ impl Fp {
     /// Implements Algorithm 2 from Patrick Longa's
     /// [ePrint 2022-367](https://eprint.iacr.org/2022/367) §3.
     #[inline]
+    #[cfg(not(target_os = "zkvm"))]
     pub(crate) fn sum_of_products<const T: usize>(a: [Fp; T], b: [Fp; T]) -> Fp {
         // For a single `a x b` multiplication, operand scanning (schoolbook) takes each
         // limb of `a` in turn, and multiplies it by all of the limbs of `b` to compute
@@ -562,7 +740,20 @@ impl Fp {
     }
 
     #[inline]
-    pub const fn mul(&self, rhs: &Fp) -> Fp {
+    #[cfg(target_os = "zkvm")]
+    pub fn mul_inp(&mut self, rhs: &Fp) {
+        unsafe {
+            syscall_bls12381_fp_mulmod(
+                self.0.as_mut_ptr() as *mut u32,
+                rhs.0.as_ptr() as *const u32,
+            );
+        }
+        self.mul_r_inv_internal();
+    }
+
+    #[inline]
+    /// CPU version of the multiplication operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_mul(&self, rhs: &Fp) -> Fp {
         let (t0, carry) = mac(0, self.0[0], rhs.0[0], 0);
         let (t1, carry) = mac(0, self.0[0], rhs.0[1], carry);
         let (t2, carry) = mac(0, self.0[0], rhs.0[2], carry);
@@ -608,9 +799,61 @@ impl Fp {
         Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
     }
 
-    /// Squares this element.
     #[inline]
-    pub const fn square(&self) -> Self {
+    pub fn mul(&self, rhs: &Fp) -> Fp {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                }
+                out.mul_r_inv_internal();
+                out
+            } else {
+                self.cpu_mul(rhs)
+            }
+        }
+    }
+
+    /// Internal function to multiply the internal representation by `R_INV`, equivalent to transforming from
+    /// the internal Montgomery form to a plain BigInt form.
+    /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn mul_r_inv_internal(&mut self) {
+        unsafe {
+            syscall_bls12381_fp_mulmod(
+                self.0.as_mut_ptr() as *mut u32,
+                R_INV.0.as_ptr() as *const u32,
+            );
+        }
+    }
+
+    /// Internal function to multiply the internal representation by `R`, equivalent to transforming from
+    /// a plain BigInt form back to the internal Montgomery form.
+    /// Used as a bridge between the internal Montgomery representation and the zkvm precompiles.
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn mul_r_internal(&mut self) {
+        unsafe {
+            syscall_bls12381_fp_mulmod(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
+        }
+    }
+
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn square_inp(&mut self) {
+        unsafe {
+            syscall_bls12381_fp_mulmod(
+                self.0.as_mut_ptr() as *mut u32,
+                self.0.as_ptr() as *const u32,
+            );
+        }
+        self.mul_r_inv_internal();
+    }
+
+    /// CPU version of the squaring operation. Necessary to prevent syscalls in unconstrained mode.
+    pub(crate) fn cpu_square(&self) -> Self {
         let (t1, carry) = mac(0, self.0[0], self.0[1], 0);
         let (t2, carry) = mac(0, self.0[0], self.0[2], carry);
         let (t3, carry) = mac(0, self.0[0], self.0[3], carry);
@@ -657,6 +900,23 @@ impl Fp {
         let (t11, _) = adc(t11, 0, carry);
 
         Self::montgomery_reduce(t0, t1, t2, t3, t4, t5, t6, t7, t8, t9, t10, t11)
+    }
+
+    /// Squares this element.
+    #[inline]
+    pub fn square(&self) -> Self {
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut out = self.clone();
+                unsafe {
+                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                }
+                out.mul_r_inv_internal();
+                out
+            } else {
+                self.cpu_square()
+            }
+        }
     }
 }
 

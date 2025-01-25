@@ -1,5 +1,4 @@
 //! This module provides an implementation of the $\mathbb{G}_1$ group of BLS12-381.
-
 use core::borrow::Borrow;
 use core::fmt;
 use core::iter::Sum;
@@ -9,6 +8,7 @@ use group::{
     Curve, Group, GroupEncoding, UncompressedEncoding,
 };
 use rand_core::RngCore;
+use sp1_lib::bls12381::decompress_pubkey;
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(feature = "alloc")]
@@ -16,6 +16,11 @@ use group::WnafGroup;
 
 use crate::fp::Fp;
 use crate::Scalar;
+use alloc::vec;
+use alloc::vec::Vec;
+// Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
+#[cfg(target_os = "zkvm")]
+use sp1_lib::{syscall_bls12381_add, syscall_bls12381_double};
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -25,10 +30,11 @@ use crate::Scalar;
 /// "unchecked" API was misused.
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
+#[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct G1Affine {
-    pub(crate) x: Fp,
-    pub(crate) y: Fp,
-    infinity: Choice,
+    pub x: Fp,
+    pub y: Fp,
+    pub infinity: Choice,
 }
 
 impl Default for G1Affine {
@@ -324,10 +330,17 @@ impl G1Affine {
     /// Attempts to deserialize a compressed element. See [`notes::serialization`](crate::notes::serialization)
     /// for details about how group elements are serialized.
     pub fn from_compressed(bytes: &[u8; 48]) -> CtOption<Self> {
-        // We already know the point is on the curve because this is established
-        // by the y-coordinate recovery procedure in from_compressed_unchecked().
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                // by the y-coordinate recovery procedure in decompress_pubkey().
+                let decompressed = decompress_pubkey(bytes).unwrap();
 
-        Self::from_compressed_unchecked(bytes).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+                // Extra checks do not have to be done because because the precompile already does it for us.
+                G1Affine::from_uncompressed_unchecked(&decompressed)
+            } else {
+                Self::from_compressed_unchecked(bytes).and_then(|p| CtOption::new(p, p.is_torsion_free()))
+            }
+        }
     }
 
     /// Attempts to deserialize an uncompressed element, not checking if the
@@ -335,58 +348,68 @@ impl G1Affine {
     /// **This is dangerous to call unless you trust the bytes you are reading; otherwise,
     /// API invariants may be broken.** Please consider using `from_compressed()` instead.
     pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> CtOption<Self> {
-        // Obtain the three flags from the start of the byte sequence
-        let compression_flag_set = Choice::from((bytes[0] >> 7) & 1);
-        let infinity_flag_set = Choice::from((bytes[0] >> 6) & 1);
-        let sort_flag_set = Choice::from((bytes[0] >> 5) & 1);
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                // by the y-coordinate recovery procedure in decompress_pubkey().
+                let decompressed = decompress_pubkey(bytes).unwrap();
 
-        // Attempt to obtain the x-coordinate
-        let x = {
-            let mut tmp = [0; 48];
-            tmp.copy_from_slice(&bytes[0..48]);
+                // Extra checks do not have to be done because because the precompile already does it for us.
+                G1Affine::from_uncompressed_unchecked(&decompressed)
+            } else {
+                // Obtain the three flags from the start of the byte sequence
+                let compression_flag_set = Choice::from((bytes[0] >> 7) & 1);
+                let infinity_flag_set = Choice::from((bytes[0] >> 6) & 1);
+                let sort_flag_set = Choice::from((bytes[0] >> 5) & 1);
 
-            // Mask away the flag bits
-            tmp[0] &= 0b0001_1111;
+                // Attempt to obtain the x-coordinate
+                let x = {
+                    let mut tmp = [0; 48];
+                    tmp.copy_from_slice(&bytes[0..48]);
 
-            Fp::from_bytes(&tmp)
-        };
+                    // Mask away the flag bits
+                    tmp[0] &= 0b0001_1111;
 
-        x.and_then(|x| {
-            // If the infinity flag is set, return the value assuming
-            // the x-coordinate is zero and the sort bit is not set.
-            //
-            // Otherwise, return a recovered point (assuming the correct
-            // y-coordinate can be found) so long as the infinity flag
-            // was not set.
-            CtOption::new(
-                G1Affine::identity(),
-                infinity_flag_set & // Infinity flag should be set
-                compression_flag_set & // Compression flag should be set
-                (!sort_flag_set) & // Sort flag should not be set
-                x.is_zero(), // The x-coordinate should be zero
-            )
-            .or_else(|| {
-                // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
-                ((x.square() * x) + B).sqrt().and_then(|y| {
-                    // Switch to the correct y-coordinate if necessary.
-                    let y = Fp::conditional_select(
-                        &y,
-                        &-y,
-                        y.lexicographically_largest() ^ sort_flag_set,
-                    );
+                    Fp::from_bytes(&tmp)
+                };
 
+                x.and_then(|x| {
+                    // If the infinity flag is set, return the value assuming
+                    // the x-coordinate is zero and the sort bit is not set.
+                    //
+                    // Otherwise, return a recovered point (assuming the correct
+                    // y-coordinate can be found) so long as the infinity flag
+                    // was not set.
                     CtOption::new(
-                        G1Affine {
-                            x,
-                            y,
-                            infinity: infinity_flag_set,
-                        },
-                        (!infinity_flag_set) & // Infinity flag should not be set
-                        compression_flag_set, // Compression flag should be set
+                        G1Affine::identity(),
+                        infinity_flag_set & // Infinity flag should be set
+                                    compression_flag_set & // Compression flag should be set
+                                    (!sort_flag_set) & // Sort flag should not be set
+                                    x.is_zero(), // The x-coordinate should be zero
                     )
+                    .or_else(|| {
+                        // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+                        ((x.square() * x) + B).sqrt().and_then(|y| {
+                            // Switch to the correct y-coordinate if necessary.
+                            let y = Fp::conditional_select(
+                                &y,
+                                &-y,
+                                y.lexicographically_largest() ^ sort_flag_set,
+                            );
+
+                            CtOption::new(
+                                G1Affine {
+                                    x,
+                                    y,
+                                    infinity: infinity_flag_set,
+                                },
+                                (!infinity_flag_set) & // Infinity flag should not be set
+                                                compression_flag_set, // Compression flag should be set
+                            )
+                        })
+                    })
                 })
-            })
-        })
+            }
+        }
     }
 
     /// Returns true if this element is the identity (the point at infinity).
@@ -415,6 +438,57 @@ impl G1Affine {
         // y^2 - x^3 ?= 4
         (self.y.square() - (self.x.square() * self.x)).ct_eq(&B) | self.infinity
     }
+
+    /// Adds two affine points together.
+    /// This function assumes that both values are on the curve.
+    /// In the zkvm context, this is accelerated with precompiles. In regular rust, this entails
+    /// converting one of the points to projective coordinates and then converting the output back.
+    pub fn add_affine(&self, rhs: &Self) -> Self {
+        if self.is_identity().into() {
+            return rhs.clone();
+        } else if rhs.is_identity().into() {
+            return self.clone();
+        }
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                // The add precompile only works when P != Q and P != -Q
+                if self.x != rhs.x {
+                    // In this case, we know that P != Q and P != -Q, since both Q and -Q have the same `x` coordinate
+                    let mut res = self.clone();
+                    res.x.mul_r_inv_internal();
+                    res.y.mul_r_inv_internal();
+                    let mut other = rhs.clone();
+                    other.x.mul_r_inv_internal();
+                    other.y.mul_r_inv_internal();
+                    unsafe {
+                        syscall_bls12381_add(res.x.0.as_mut_ptr() as *mut [u32; 24], other.x.0.as_ptr() as *const [u32; 24]);
+                    }
+                    res.x.mul_r_internal();
+                    res.y.mul_r_internal();
+                    res
+                } else if self.y == rhs.y {
+                    // In this case, we know that P == Q, since both `x` and `y` are equal, so use the double precompile instead
+                    let mut res = self.clone();
+                    res.x.mul_r_inv_internal();
+                    res.y.mul_r_inv_internal();
+                    unsafe {
+                        syscall_bls12381_double(res.x.0.as_mut_ptr() as *mut [u32; 24]);
+                    }
+                    res.x.mul_r_internal();
+                    res.y.mul_r_internal();
+                    res
+                } else {
+                    // In this case, we know that P == -Q, since `x` is equal but `y` is different, so we can just return the identity
+                    Self::identity()
+                }
+            } else {
+                let proj = G1Projective::from(rhs);
+                let res = proj + self;
+                G1Affine::from(res)
+            }
+        }
+    }
 }
 
 /// A nontrivial third root of unity in Fp
@@ -427,7 +501,7 @@ pub const BETA: Fp = Fp::from_raw_unchecked([
     0x051b_a4ab_241b_6160,
 ]);
 
-fn endomorphism(p: &G1Affine) -> G1Affine {
+pub fn endomorphism(p: &G1Affine) -> G1Affine {
     // Endomorphism of the points on the curve.
     // endomorphism_p(x,y) = (BETA * x, y)
     // where BETA is a non-trivial cubic root of unity in Fq.
@@ -440,9 +514,9 @@ fn endomorphism(p: &G1Affine) -> G1Affine {
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
 pub struct G1Projective {
-    pub(crate) x: Fp,
-    pub(crate) y: Fp,
-    pub(crate) z: Fp,
+    pub x: Fp,
+    pub y: Fp,
+    pub z: Fp,
 }
 
 impl Default for G1Projective {
@@ -852,6 +926,94 @@ impl G1Projective {
         (self.y.square() * self.z).ct_eq(&(self.x.square() * self.x + self.z.square() * self.z * B))
             | self.z.is_zero()
     }
+
+    /// Performs a Variable Base Multiscalar Multiplication.
+    pub fn msm_variable_base(points: &[G1Projective], scalars: &[Scalar]) -> G1Projective {
+        let c = if scalars.len() < 32 {
+            3
+        } else {
+            ln_without_floats(scalars.len()) + 2
+        };
+
+        let num_bits = 255usize;
+        let fr_one = Scalar::one();
+
+        let zero = G1Projective::identity();
+        let window_starts: Vec<_> = (0..num_bits).step_by(c).collect();
+
+        let window_starts_iter = window_starts.into_iter();
+
+        // Each window is of size `c`.
+        // We divide up the bits 0..num_bits into windows of size `c`, and
+        // in parallel process each such window.
+        let window_sums: Vec<_> = window_starts_iter
+            .map(|w_start| {
+                let mut res = zero;
+                // We don't need the "zero" bucket, so we only have 2^c - 1 buckets
+                let mut buckets = vec![zero; (1 << c) - 1];
+                scalars
+                    .iter()
+                    .zip(points)
+                    .filter(|(s, _)| !(*s == &Scalar::zero()))
+                    .for_each(|(&scalar, base)| {
+                        if scalar == fr_one {
+                            // We only process unit scalars once in the first window.
+                            if w_start == 0 {
+                                res = res.add(base);
+                            }
+                        } else {
+                            let mut scalar = Scalar::montgomery_reduce(
+                                scalar.0[0],
+                                scalar.0[1],
+                                scalar.0[2],
+                                scalar.0[3],
+                                0,
+                                0,
+                                0,
+                                0,
+                            );
+
+                            // We right-shift by w_start, thus getting rid of the
+                            // lower bits.
+                            scalar = scalar.divn(w_start as u32);
+                            // We mod the remaining bits by the window size.
+                            let scalar = scalar.0[0] % (1 << c);
+
+                            // If the scalar is non-zero, we update the corresponding
+                            // bucket.
+                            // (Recall that `buckets` doesn't have a zero bucket.)
+                            if scalar != 0 {
+                                buckets[(scalar - 1) as usize] =
+                                    buckets[(scalar - 1) as usize].add(base);
+                            }
+                        }
+                    });
+
+                let mut running_sum = G1Projective::identity();
+                for b in buckets.into_iter().rev() {
+                    running_sum += b;
+                    res += &running_sum;
+                }
+
+                res
+            })
+            .collect();
+
+        // We store the sum for the lowest window.
+        let lowest = *window_sums.first().unwrap();
+        // We're traversing windows from high to low.
+        window_sums[1..]
+            .iter()
+            .rev()
+            .fold(zero, |mut total, sum_i| {
+                total += sum_i;
+                for _ in 0..c {
+                    total = total.double();
+                }
+                total
+            })
+            + lowest
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -1089,6 +1251,29 @@ impl UncompressedEncoding for G1Affine {
     fn to_uncompressed(&self) -> Self::Uncompressed {
         G1Uncompressed(self.to_uncompressed())
     }
+}
+
+fn ln_without_floats(a: usize) -> usize {
+    // log2(a) * ln(2)
+    (log2(a) * 69 / 100) as usize
+}
+
+fn log2(x: usize) -> u32 {
+    if x <= 1 {
+        return 0;
+    }
+
+    let n = x.leading_zeros();
+    core::mem::size_of::<usize>() as u32 * 8 - n
+}
+
+#[test]
+fn msm_variable_base_test() {
+    let points = vec![G1Projective::generator(); 1];
+    let scalars = vec![Scalar::from(100u64); 1];
+    let premultiplied = G1Projective::generator() * Scalar::from(100u64);
+    let subject = G1Projective::msm_variable_base(&points, &scalars);
+    assert_eq!(subject, premultiplied);
 }
 
 #[test]
