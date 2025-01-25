@@ -1,5 +1,5 @@
 [package]
-name = "sp1_bls12_381"
+name = "bls12_381"
 version = "0.8.0"
 authors = [
     "Bhargav Annem <bhargav.annem@gmail.com>",
@@ -33,6 +33,7 @@ sp1-lib = { version = "4.0.0", default-features = false }
 [dev-dependencies]
 csv = ">= 1.0, < 1.2" # csv 1.2 has MSRV 1.60
 criterion = "0.3"
+hex-literal = "0.3"
 rand_xorshift = "0.3"
 sha2 = "0.10"
 sha3 = "0.10"
