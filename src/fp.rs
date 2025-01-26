@@ -130,7 +130,7 @@ const R3: Fp = Fp([
     0x0aa6_3460_9175_5d4d,
 ]);
 
-impl<'a> Neg for &'a Fp {
+impl Neg for &Fp {
     type Output = Fp;
 
     #[inline]
@@ -148,29 +148,29 @@ impl Neg for Fp {
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp> for &'a Fp {
+impl<'a> Sub<&'a Fp> for &Fp {
     type Output = Fp;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp) -> Fp {
+    fn sub(self, rhs: &'a Fp) -> Fp {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp> for &'a Fp {
+impl<'a> Add<&'a Fp> for &Fp {
     type Output = Fp;
 
     #[inline]
-    fn add(self, rhs: &'b Fp) -> Fp {
+    fn add(self, rhs: &'a Fp) -> Fp {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
+impl<'a> Mul<&'a Fp> for &Fp {
     type Output = Fp;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp) -> Fp {
+    fn mul(self, rhs: &'a Fp) -> Fp {
         self.mul(rhs)
     }
 }

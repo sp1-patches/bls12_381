@@ -449,20 +449,20 @@ impl Fp6 {
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp6> for &'a Fp6 {
+impl<'a> Mul<&'a Fp6> for &Fp6 {
     type Output = Fp6;
 
     #[inline]
-    fn mul(self, other: &'b Fp6) -> Self::Output {
+    fn mul(self, other: &'a Fp6) -> Self::Output {
         self.mul_interleaved(other)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp6> for &'a Fp6 {
+impl<'a> Add<&'a Fp6> for &Fp6 {
     type Output = Fp6;
 
     #[inline]
-    fn add(self, rhs: &'b Fp6) -> Self::Output {
+    fn add(self, rhs: &'a Fp6) -> Self::Output {
         Fp6 {
             c0: self.c0 + rhs.c0,
             c1: self.c1 + rhs.c1,
@@ -471,7 +471,7 @@ impl<'a, 'b> Add<&'b Fp6> for &'a Fp6 {
     }
 }
 
-impl<'a> Neg for &'a Fp6 {
+impl Neg for &Fp6 {
     type Output = Fp6;
 
     #[inline]
@@ -493,11 +493,11 @@ impl Neg for Fp6 {
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp6> for &'a Fp6 {
+impl<'a> Sub<&'a Fp6> for &Fp6 {
     type Output = Fp6;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp6) -> Self::Output {
+    fn sub(self, rhs: &'a Fp6) -> Self::Output {
         Fp6 {
             c0: self.c0 - rhs.c0,
             c1: self.c1 - rhs.c1,

@@ -329,20 +329,20 @@ impl Fp12 {
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp12> for &'a Fp12 {
+impl<'a> Mul<&'a Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn mul(self, other: &'b Fp12) -> Self::Output {
+    fn mul(self, other: &'a Fp12) -> Self::Output {
         self.mul(other)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp12> for &'a Fp12 {
+impl<'a> Add<&'a Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn add(self, rhs: &'b Fp12) -> Self::Output {
+    fn add(self, rhs: &'a Fp12) -> Self::Output {
         Fp12 {
             c0: self.c0 + rhs.c0,
             c1: self.c1 + rhs.c1,
@@ -350,7 +350,7 @@ impl<'a, 'b> Add<&'b Fp12> for &'a Fp12 {
     }
 }
 
-impl<'a> Neg for &'a Fp12 {
+impl Neg for &Fp12 {
     type Output = Fp12;
 
     #[inline]
@@ -371,11 +371,11 @@ impl Neg for Fp12 {
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp12> for &'a Fp12 {
+impl<'a> Sub<&'a Fp12> for &Fp12 {
     type Output = Fp12;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp12) -> Self::Output {
+    fn sub(self, rhs: &'a Fp12) -> Self::Output {
         Fp12 {
             c0: self.c0 - rhs.c0,
             c1: self.c1 - rhs.c1,

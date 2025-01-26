@@ -72,7 +72,7 @@ impl ConditionallySelectable for Fp2 {
     }
 }
 
-impl<'a> Neg for &'a Fp2 {
+impl Neg for &Fp2 {
     type Output = Fp2;
 
     #[inline]
@@ -90,29 +90,29 @@ impl Neg for Fp2 {
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp2> for &'a Fp2 {
+impl<'a> Sub<&'a Fp2> for &Fp2 {
     type Output = Fp2;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp2) -> Fp2 {
+    fn sub(self, rhs: &'a Fp2) -> Fp2 {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp2> for &'a Fp2 {
+impl<'a> Add<&'a Fp2> for &Fp2 {
     type Output = Fp2;
 
     #[inline]
-    fn add(self, rhs: &'b Fp2) -> Fp2 {
+    fn add(self, rhs: &'a Fp2) -> Fp2 {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp2> for &'a Fp2 {
+impl<'a> Mul<&'a Fp2> for &Fp2 {
     type Output = Fp2;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp2) -> Fp2 {
+    fn mul(self, rhs: &'a Fp2) -> Fp2 {
         self.mul(rhs)
     }
 }
@@ -548,7 +548,7 @@ impl Fp2 {
             // or we hint in sqrt(nqr * self)
             unconstrained! {
                let mut buf = [0u8; 97];
-                
+
                if let Some(root) = self.cpu_sqrt().into_option() {
                    let bytes = root.to_bytes();
                    buf[..96].copy_from_slice(&bytes);
@@ -642,7 +642,7 @@ impl Fp2 {
 
             let byte_vec = read_vec();
 
-            // Safety: 
+            // Safety:
             // - the length of the byte_vec is guaranteed to be 48, since we just pushed it.
             // - the executor pushes to the front.
             // - the ref is only cloned from before byte_vec is dropped.

@@ -21,11 +21,11 @@ pub const fn mac(a: u64, b: u64, c: u64, carry: u64) -> (u64, u64) {
 
 macro_rules! impl_add_binop_specify_output {
     ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Add<&'b $rhs> for $lhs {
+        impl<'a> Add<&'a $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
-            fn add(self, rhs: &'b $rhs) -> $output {
+            fn add(self, rhs: &'a $rhs) -> $output {
                 &self + rhs
             }
         }
@@ -52,11 +52,11 @@ macro_rules! impl_add_binop_specify_output {
 
 macro_rules! impl_sub_binop_specify_output {
     ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Sub<&'b $rhs> for $lhs {
+        impl<'a> Sub<&'a $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
-            fn sub(self, rhs: &'b $rhs) -> $output {
+            fn sub(self, rhs: &'a $rhs) -> $output {
                 &self - rhs
             }
         }
@@ -90,11 +90,11 @@ macro_rules! impl_binops_additive_specify_output {
 
 macro_rules! impl_binops_multiplicative_mixed {
     ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Mul<&'b $rhs> for $lhs {
+        impl<'a> Mul<&'a $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
-            fn mul(self, rhs: &'b $rhs) -> $output {
+            fn mul(self, rhs: &'a $rhs) -> $output {
                 &self * rhs
             }
         }
@@ -137,16 +137,16 @@ macro_rules! impl_binops_additive {
             }
         }
 
-        impl<'b> SubAssign<&'b $rhs> for $lhs {
+        impl<'a> SubAssign<&'a $rhs> for $lhs {
             #[inline]
-            fn sub_assign(&mut self, rhs: &'b $rhs) {
+            fn sub_assign(&mut self, rhs: &'a $rhs) {
                 *self = &*self - rhs;
             }
         }
 
-        impl<'b> AddAssign<&'b $rhs> for $lhs {
+        impl<'a> AddAssign<&'a $rhs> for $lhs {
             #[inline]
-            fn add_assign(&mut self, rhs: &'b $rhs) {
+            fn add_assign(&mut self, rhs: &'a $rhs) {
                 *self = &*self + rhs;
             }
         }
@@ -164,9 +164,9 @@ macro_rules! impl_binops_multiplicative {
             }
         }
 
-        impl<'b> MulAssign<&'b $rhs> for $lhs {
+        impl<'a> MulAssign<&'a $rhs> for $lhs {
             #[inline]
-            fn mul_assign(&mut self, rhs: &'b $rhs) {
+            fn mul_assign(&mut self, rhs: &'a $rhs) {
                 *self = &*self * rhs;
             }
         }

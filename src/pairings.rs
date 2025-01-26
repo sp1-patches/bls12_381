@@ -350,11 +350,11 @@ impl MillerLoopResult {
     }
 }
 
-impl<'a, 'b> Add<&'b MillerLoopResult> for &'a MillerLoopResult {
+impl<'a> Add<&'a MillerLoopResult> for &MillerLoopResult {
     type Output = MillerLoopResult;
 
     #[inline]
-    fn add(self, rhs: &'b MillerLoopResult) -> MillerLoopResult {
+    fn add(self, rhs: &'a MillerLoopResult) -> MillerLoopResult {
         MillerLoopResult(self.0 * rhs.0)
     }
 }
@@ -368,9 +368,9 @@ impl AddAssign<MillerLoopResult> for MillerLoopResult {
     }
 }
 
-impl<'b> AddAssign<&'b MillerLoopResult> for MillerLoopResult {
+impl<'a> AddAssign<&'a MillerLoopResult> for MillerLoopResult {
     #[inline]
-    fn add_assign(&mut self, rhs: &'b MillerLoopResult) {
+    fn add_assign(&mut self, rhs: &'a MillerLoopResult) {
         *self = *self + rhs;
     }
 }
@@ -431,7 +431,7 @@ impl Gt {
     }
 }
 
-impl<'a> Neg for &'a Gt {
+impl Neg for &Gt {
     type Output = Gt;
 
     #[inline]
@@ -450,28 +450,28 @@ impl Neg for Gt {
     }
 }
 
-impl<'a, 'b> Add<&'b Gt> for &'a Gt {
+impl<'a> Add<&'a Gt> for &Gt {
     type Output = Gt;
 
     #[inline]
-    fn add(self, rhs: &'b Gt) -> Gt {
+    fn add(self, rhs: &'a Gt) -> Gt {
         Gt(self.0 * rhs.0)
     }
 }
 
-impl<'a, 'b> Sub<&'b Gt> for &'a Gt {
+impl<'a> Sub<&'a Gt> for &Gt {
     type Output = Gt;
 
     #[inline]
-    fn sub(self, rhs: &'b Gt) -> Gt {
+    fn sub(self, rhs: &'a Gt) -> Gt {
         self + (-rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a Gt {
+impl<'a> Mul<&'a Scalar> for &Gt {
     type Output = Gt;
 
-    fn mul(self, other: &'b Scalar) -> Self::Output {
+    fn mul(self, other: &'a Scalar) -> Self::Output {
         let mut acc = Gt::identity();
 
         // This is a simple double-and-add implementation of group element
@@ -731,7 +731,7 @@ pub fn multi_miller_loop(terms: &[(&G1Affine, &G2Prepared)]) -> MillerLoopResult
         index: usize,
     }
 
-    impl<'a, 'b, 'c> MillerLoopDriver for Adder<'a, 'b, 'c> {
+    impl MillerLoopDriver for Adder<'_, '_, '_> {
         type Output = Fp12;
 
         fn doubling_step(&mut self, f: &mut Self::Output) {

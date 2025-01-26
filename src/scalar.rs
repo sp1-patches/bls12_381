@@ -124,7 +124,7 @@ const GENERATOR: Scalar = Scalar([
     0x3513_3220_8fc5_a8c4,
 ]);
 
-impl<'a> Neg for &'a Scalar {
+impl Neg for &Scalar {
     type Output = Scalar;
 
     #[inline]
@@ -142,29 +142,29 @@ impl Neg for Scalar {
     }
 }
 
-impl<'a, 'b> Sub<&'b Scalar> for &'a Scalar {
+impl<'a> Sub<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn sub(self, rhs: &'b Scalar) -> Scalar {
+    fn sub(self, rhs: &'a Scalar) -> Scalar {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Scalar> for &'a Scalar {
+impl<'a> Add<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn add(self, rhs: &'b Scalar) -> Scalar {
+    fn add(self, rhs: &'a Scalar) -> Scalar {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a Scalar {
+impl<'a> Mul<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn mul(self, rhs: &'b Scalar) -> Scalar {
+    fn mul(self, rhs: &'a Scalar) -> Scalar {
         self.mul(rhs)
     }
 }
@@ -552,13 +552,13 @@ impl Scalar {
             }
             let byte_vec = read_vec();
 
-            // Safety: 
+            // Safety:
             //
             // - The byte_vec is guaranteed to be 32 bytes long because we just pushed it,
             // and the executor always pushes to the front of the input buffer.
             //
             // `from_scalar` just clones the bytes before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8;32]) }; 
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) };
             let inv = Scalar::from_bytes(bytes).unwrap();
 
             assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");

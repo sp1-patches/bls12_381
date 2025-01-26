@@ -111,7 +111,7 @@ impl PartialEq for G1Affine {
     }
 }
 
-impl<'a> Neg for &'a G1Affine {
+impl Neg for &G1Affine {
     type Output = G1Affine;
 
     #[inline]
@@ -133,38 +133,38 @@ impl Neg for G1Affine {
     }
 }
 
-impl<'a, 'b> Add<&'b G1Projective> for &'a G1Affine {
+impl<'a> Add<&'a G1Projective> for &G1Affine {
     type Output = G1Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G1Projective) -> G1Projective {
+    fn add(self, rhs: &'a G1Projective) -> G1Projective {
         rhs.add_mixed(self)
     }
 }
 
-impl<'a, 'b> Add<&'b G1Affine> for &'a G1Projective {
+impl<'a> Add<&'a G1Affine> for &G1Projective {
     type Output = G1Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G1Affine) -> G1Projective {
+    fn add(self, rhs: &'a G1Affine) -> G1Projective {
         self.add_mixed(rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G1Projective> for &'a G1Affine {
+impl<'a> Sub<&'a G1Projective> for &G1Affine {
     type Output = G1Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G1Projective) -> G1Projective {
+    fn sub(self, rhs: &'a G1Projective) -> G1Projective {
         self + (-rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G1Affine> for &'a G1Projective {
+impl<'a> Sub<&'a G1Affine> for &G1Projective {
     type Output = G1Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G1Affine) -> G1Projective {
+    fn sub(self, rhs: &'a G1Affine) -> G1Projective {
         self + (-rhs)
     }
 }
@@ -478,9 +478,9 @@ impl G1Affine {
             }
         }
     }
-    
+
     #[inline(always)]
-    pub fn double(mut self) -> Self {
+    pub fn double(self) -> Self {
         if self.is_identity().into() {
             return self;
         }
@@ -500,7 +500,7 @@ impl G1Affine {
                 G1Affine::from(res)
             }
         }
-    } 
+    }
 }
 
 /// A nontrivial third root of unity in Fp
@@ -599,7 +599,7 @@ impl PartialEq for G1Projective {
     }
 }
 
-impl<'a> Neg for &'a G1Projective {
+impl Neg for &G1Projective {
     type Output = G1Projective;
 
     #[inline]
@@ -621,54 +621,54 @@ impl Neg for G1Projective {
     }
 }
 
-impl<'a, 'b> Add<&'b G1Projective> for &'a G1Projective {
+impl<'a> Add<&'a G1Projective> for &G1Projective {
     type Output = G1Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G1Projective) -> G1Projective {
+    fn add(self, rhs: &'a G1Projective) -> G1Projective {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G1Projective> for &'a G1Projective {
+impl<'a> Sub<&'a G1Projective> for &G1Projective {
     type Output = G1Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G1Projective) -> G1Projective {
+    fn sub(self, rhs: &'a G1Projective) -> G1Projective {
         self + (-rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a G1Projective {
+impl<'a> Mul<&'a Scalar> for &G1Projective {
     type Output = G1Projective;
 
-    fn mul(self, other: &'b Scalar) -> Self::Output {
+    fn mul(self, other: &'a Scalar) -> Self::Output {
         self.multiply(&other.to_bytes())
     }
 }
 
-impl<'a, 'b> Mul<&'b G1Projective> for &'a Scalar {
+impl<'a> Mul<&'a G1Projective> for &Scalar {
     type Output = G1Projective;
 
     #[inline]
-    fn mul(self, rhs: &'b G1Projective) -> Self::Output {
+    fn mul(self, rhs: &'a G1Projective) -> Self::Output {
         rhs * self
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a G1Affine {
+impl<'a> Mul<&'a Scalar> for &G1Affine {
     type Output = G1Projective;
 
-    fn mul(self, other: &'b Scalar) -> Self::Output {
+    fn mul(self, other: &'a Scalar) -> Self::Output {
         G1Projective::from(self).multiply(&other.to_bytes())
     }
 }
 
-impl<'a, 'b> Mul<&'b G1Affine> for &'a Scalar {
+impl<'a> Mul<&'a G1Affine> for &Scalar {
     type Output = G1Projective;
 
     #[inline]
-    fn mul(self, rhs: &'b G1Affine) -> Self::Output {
+    fn mul(self, rhs: &'a G1Affine) -> Self::Output {
         rhs * self
     }
 }
