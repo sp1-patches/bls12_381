@@ -480,7 +480,8 @@ impl G1Affine {
     }
 
     #[inline(always)]
-    pub fn double(self) -> Self {
+    #[allow(unused_mut)]
+    pub fn double(mut self) -> Self {
         if self.is_identity().into() {
             return self;
         }
