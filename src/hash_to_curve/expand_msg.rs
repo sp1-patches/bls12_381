@@ -56,7 +56,7 @@ impl ExpandMsgDst {
             if input_len > MAX_DST_LENGTH {
                 H::default()
                     .chain(OVERSIZE_DST_SALT)
-                    .chain(&dst)
+                    .chain(dst)
                     .finalize_xof()
                     .read(&mut buf[..L::USIZE]);
                 L::USIZE
@@ -81,7 +81,7 @@ impl ExpandMsgDst {
             if input_len > MAX_DST_LENGTH {
                 let hashed = H::default()
                     .chain(OVERSIZE_DST_SALT)
-                    .chain(&dst)
+                    .chain(dst)
                     .finalize_fixed();
                 let len = hashed.len();
                 buf[..len].copy_from_slice(&hashed);

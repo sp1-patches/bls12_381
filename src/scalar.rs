@@ -1,11 +1,19 @@
 //! This module provides an implementation of the BLS12-381 scalar field $\mathbb{F}_q$
 //! where `q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001`
 
+use cfg_if::cfg_if;
 use core::fmt;
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use ff::{Field, PrimeField};
 use rand_core::RngCore;
 
-use ff::{Field, PrimeField};
+cfg_if! {
+    if #[cfg(target_os = "zkvm")] {
+        use sp1_lib::sys_bigint;
+        use sp1_lib::{io::{hint_slice, read_vec}, unconstrained};
+    }
+}
+
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 #[cfg(feature = "bits")]
@@ -19,7 +27,7 @@ use crate::util::{adc, mac, sbb};
 // integers in little-endian order. `Scalar` values are always in
 // Montgomery form; i.e., Scalar(a) = aR mod q, with R = 2^256.
 #[derive(Clone, Copy, Eq)]
-pub struct Scalar(pub(crate) [u64; 4]);
+pub struct Scalar(pub [u64; 4]);
 
 impl fmt::Debug for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -81,7 +89,7 @@ const MODULUS: Scalar = Scalar([
 ]);
 
 /// The modulus as u32 limbs.
-#[cfg(all(feature = "bits", not(target_pointer_width = "64")))]
+#[cfg(target_os = "zkvm")]
 const MODULUS_LIMBS_32: [u32; 8] = [
     0x0000_0001,
     0xffff_ffff,
@@ -91,6 +99,18 @@ const MODULUS_LIMBS_32: [u32; 8] = [
     0x3339_d808,
     0x299d_7d48,
     0x73ed_a753,
+];
+
+#[cfg(target_os = "zkvm")]
+const R_INV: [u32; 8] = [
+    0xfe75_c040,
+    0x13f7_5b69,
+    0x09dc_705f,
+    0xab6f_ca8f,
+    0x4f77_266a,
+    0x7204_078a,
+    0x3000_9d57,
+    0x1bbe_8693,
 ];
 
 // The number of bits needed to represent the modulus.
@@ -104,7 +124,7 @@ const GENERATOR: Scalar = Scalar([
     0x3513_3220_8fc5_a8c4,
 ]);
 
-impl<'a> Neg for &'a Scalar {
+impl Neg for &Scalar {
     type Output = Scalar;
 
     #[inline]
@@ -122,29 +142,29 @@ impl Neg for Scalar {
     }
 }
 
-impl<'a, 'b> Sub<&'b Scalar> for &'a Scalar {
+impl<'a> Sub<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn sub(self, rhs: &'b Scalar) -> Scalar {
+    fn sub(self, rhs: &'a Scalar) -> Scalar {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Scalar> for &'a Scalar {
+impl<'a> Add<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn add(self, rhs: &'b Scalar) -> Scalar {
+    fn add(self, rhs: &'a Scalar) -> Scalar {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a Scalar {
+impl<'a> Mul<&'a Scalar> for &Scalar {
     type Output = Scalar;
 
     #[inline]
-    fn mul(self, rhs: &'b Scalar) -> Scalar {
+    fn mul(self, rhs: &'a Scalar) -> Scalar {
         self.mul(rhs)
     }
 }
@@ -332,13 +352,13 @@ impl Scalar {
 
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Scalar` representation.
-    pub const fn from_raw(val: [u64; 4]) -> Self {
-        (&Scalar(val)).mul(&R2)
+    pub fn from_raw(val: [u64; 4]) -> Self {
+        Scalar(val).mul(&R2)
     }
 
-    /// Squares this element.
     #[inline]
-    pub const fn square(&self) -> Scalar {
+    /// CPU version of the square operation. Necessary to prevent syscalls in unconstrained mode.
+    fn cpu_square(&self) -> Scalar {
         let (r1, carry) = mac(0, self.0[0], self.0[1], 0);
         let (r2, carry) = mac(0, self.0[0], self.0[2], carry);
         let (r3, r4) = mac(0, self.0[0], self.0[3], carry);
@@ -368,6 +388,20 @@ impl Scalar {
         Scalar::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
     }
 
+    /// Squares this element.
+    #[inline]
+    pub fn square(&self) -> Scalar {
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut res = *self;
+                res.mul_inp(self);
+                res
+            } else {
+                self.cpu_square()
+            }
+        }
+    }
+
     /// Exponentiates `self` by `by`, where `by` is a
     /// little-endian order integer exponent.
     pub fn pow(&self, by: &[u64; 4]) -> Self {
@@ -376,7 +410,7 @@ impl Scalar {
             for i in (0..64).rev() {
                 res = res.square();
                 let mut tmp = res;
-                tmp *= self;
+                tmp.mul_inp(self);
                 res.conditional_assign(&tmp, (((*e >> i) & 0x1) as u8).into());
             }
         }
@@ -396,7 +430,7 @@ impl Scalar {
                 res = res.square();
 
                 if ((*e >> i) & 1) == 1 {
-                    res.mul_assign(self);
+                    res.mul_inp(self);
                 }
             }
         }
@@ -405,105 +439,139 @@ impl Scalar {
 
     /// Computes the multiplicative inverse of this element,
     /// failing if the element is zero.
-    pub fn invert(&self) -> CtOption<Self> {
+    /// CPU version of the invert operation. Necessary to prevent syscalls in unconstrained mode.
+    fn cpu_invert(&self) -> CtOption<Self> {
         #[inline(always)]
         fn square_assign_multi(n: &mut Scalar, num_times: usize) {
             for _ in 0..num_times {
-                *n = n.square();
+                *n = n.cpu_square();
             }
         }
         // found using https://github.com/kwantam/addchain
-        let mut t0 = self.square();
-        let mut t1 = t0 * self;
-        let mut t16 = t0.square();
-        let mut t6 = t16.square();
-        let mut t5 = t6 * t0;
-        t0 = t6 * t16;
-        let mut t12 = t5 * t16;
-        let mut t2 = t6.square();
-        let mut t7 = t5 * t6;
-        let mut t15 = t0 * t5;
-        let mut t17 = t12.square();
-        t1 *= t17;
-        let mut t3 = t7 * t2;
-        let t8 = t1 * t17;
-        let t4 = t8 * t2;
-        let t9 = t8 * t7;
-        t7 = t4 * t5;
-        let t11 = t4 * t17;
-        t5 = t9 * t17;
-        let t14 = t7 * t15;
-        let t13 = t11 * t12;
-        t12 = t11 * t17;
-        t15 *= &t12;
-        t16 *= &t15;
-        t3 *= &t16;
-        t17 *= &t3;
-        t0 *= &t17;
-        t6 *= &t0;
-        t2 *= &t6;
+        let mut t0 = self.cpu_square();
+        let mut t1 = t0.cpu_mul(self);
+        let mut t16 = t0.cpu_square();
+        let mut t6 = t16.cpu_square();
+        let mut t5 = t6.cpu_mul(&t0);
+        t0 = t6.cpu_mul(&t16);
+        let mut t12 = t5.cpu_mul(&t16);
+        let mut t2 = t6.cpu_square();
+        let mut t7 = t5.cpu_mul(&t6);
+        let mut t15 = t0.cpu_mul(&t5);
+        let mut t17 = t12.cpu_square();
+        t1 = t1.cpu_mul(&t17);
+        let mut t3 = t7.cpu_mul(&t2);
+        let t8 = t1.cpu_mul(&t17);
+        let t4 = t8.cpu_mul(&t2);
+        let t9 = t8.cpu_mul(&t7);
+        t7 = t4.cpu_mul(&t5);
+        let t11 = t4.cpu_mul(&t17);
+        t5 = t9.cpu_mul(&t17);
+        let t14 = t7.cpu_mul(&t15);
+        let t13 = t11.cpu_mul(&t12);
+        t12 = t11.cpu_mul(&t17);
+        t15 = t15.cpu_mul(&t12);
+        t16 = t16.cpu_mul(&t15);
+        t3 = t3.cpu_mul(&t16);
+        t17 = t17.cpu_mul(&t3);
+        t0 = t0.cpu_mul(&t17);
+        t6 = t6.cpu_mul(&t0);
+        t2 = t2.cpu_mul(&t6);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t17;
+        t0 = t0.cpu_mul(&t17);
         square_assign_multi(&mut t0, 9);
-        t0 *= &t16;
+        t0 = t0.cpu_mul(&t16);
         square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
+        t0 = t0.cpu_mul(&t15);
         square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
+        t0 = t0.cpu_mul(&t15);
         square_assign_multi(&mut t0, 7);
-        t0 *= &t14;
+        t0 = t0.cpu_mul(&t14);
         square_assign_multi(&mut t0, 7);
-        t0 *= &t13;
+        t0 = t0.cpu_mul(&t13);
         square_assign_multi(&mut t0, 10);
-        t0 *= &t12;
+        t0 = t0.cpu_mul(&t12);
         square_assign_multi(&mut t0, 9);
-        t0 *= &t11;
+        t0 = t0.cpu_mul(&t11);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t8;
+        t0 = t0.cpu_mul(&t8);
         square_assign_multi(&mut t0, 8);
-        t0 *= self;
+        t0 = t0.cpu_mul(self);
         square_assign_multi(&mut t0, 14);
-        t0 *= &t9;
+        t0 = t0.cpu_mul(&t9);
         square_assign_multi(&mut t0, 10);
-        t0 *= &t8;
+        t0 = t0.cpu_mul(&t8);
         square_assign_multi(&mut t0, 15);
-        t0 *= &t7;
+        t0 = t0.cpu_mul(&t7);
         square_assign_multi(&mut t0, 10);
-        t0 *= &t6;
+        t0 = t0.cpu_mul(&t6);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t5;
+        t0 = t0.cpu_mul(&t5);
         square_assign_multi(&mut t0, 16);
-        t0 *= &t3;
+        t0 = t0.cpu_mul(&t3);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 7);
-        t0 *= &t4;
+        t0 = t0.cpu_mul(&t4);
         square_assign_multi(&mut t0, 9);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
+        t0 = t0.cpu_mul(&t3);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
+        t0 = t0.cpu_mul(&t3);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0.cpu_mul(&t2);
         square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
+        t0 = t0.cpu_mul(&t1);
         square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
+        t0 = t0.cpu_mul(&t1);
 
         CtOption::new(t0, !self.ct_eq(&Self::zero()))
     }
 
+    pub fn invert(&self) -> CtOption<Self> {
+        #[cfg(target_os = "zkvm")]
+        {
+            if self.is_zero().into() {
+                return CtOption::new(Self::zero(), Choice::from(0u8));
+            }
+            unconstrained! {
+                let mut buf = [0u8; 32];
+                self.cpu_invert().map(|inv| {
+                    buf[0..32].copy_from_slice(&inv.to_bytes());
+                });
+                hint_slice(&buf);
+            }
+            let byte_vec = read_vec();
+
+            // Safety:
+            //
+            // - The byte_vec is guaranteed to be 32 bytes long because we just pushed it,
+            // and the executor always pushes to the front of the input buffer.
+            //
+            // `from_scalar` just clones the bytes before byte_vec is dropped.
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) };
+            let inv = Scalar::from_bytes(bytes).unwrap();
+
+            assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");
+            return CtOption::new(inv, Choice::from(1u8));
+        }
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            self.cpu_invert()
+        }
+    }
+
     #[inline(always)]
-    const fn montgomery_reduce(
+    pub const fn montgomery_reduce(
         r0: u64,
         r1: u64,
         r2: u64,
@@ -546,12 +614,47 @@ impl Scalar {
         let (r7, _) = adc(r7, carry2, carry);
 
         // Result may be within MODULUS of the correct value
+        #[allow(clippy::needless_borrow)]
         (&Scalar([r4, r5, r6, r7])).sub(&MODULUS)
     }
 
-    /// Multiplies `rhs` by `self`, returning the result.
     #[inline]
-    pub const fn mul(&self, rhs: &Self) -> Self {
+    #[cfg(target_os = "zkvm")]
+    pub(crate) fn mul_r_inv_internal(&mut self) {
+        unsafe {
+            sys_bigint(
+                self.0.as_mut_ptr() as *mut [u32; 8],
+                0,
+                self.0.as_ptr() as *const [u32; 8],
+                &R_INV,
+                &MODULUS_LIMBS_32,
+            );
+        }
+    }
+
+    #[inline]
+    pub fn mul_inp(&mut self, rhs: &Scalar) {
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                unsafe {
+                    sys_bigint(
+                        self.0.as_mut_ptr() as *mut[u32; 8],
+                        0,
+                        self.0.as_ptr() as *const [u32; 8],
+                        rhs.0.as_ptr() as *const [u32; 8],
+                        &MODULUS_LIMBS_32,
+                    );
+                }
+                self.mul_r_inv_internal();
+            }
+            else {
+                *self = self.mul(rhs);
+            }
+        }
+    }
+
+    /// CPU version of the multiplication operation. Necessary to prevent syscalls in unconstrained mode.
+    fn cpu_mul(&self, rhs: &Self) -> Self {
         // Schoolbook multiplication
 
         let (r0, carry) = mac(0, self.0[0], rhs.0[0], 0);
@@ -575,6 +678,20 @@ impl Scalar {
         let (r6, r7) = mac(r6, self.0[3], rhs.0[3], carry);
 
         Scalar::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
+    }
+
+    /// Multiplies `rhs` by `self`, returning the result.
+    #[inline]
+    pub fn mul(&self, rhs: &Self) -> Self {
+        cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut res = *self;
+                res.mul_inp(rhs);
+                res
+            } else {
+                self.cpu_mul(rhs)
+            }
+        }
     }
 
     /// Subtracts `rhs` from `self`, returning the result.
@@ -605,6 +722,8 @@ impl Scalar {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
+
+        #[allow(clippy::needless_borrow)]
         (&Scalar([d0, d1, d2, d3])).sub(&MODULUS)
     }
 
@@ -624,6 +743,35 @@ impl Scalar {
         let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
 
         Scalar([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
+    }
+
+    #[inline]
+    pub fn divn(&self, mut n: u32) -> Scalar {
+        if n >= 256 {
+            return Scalar::from(0);
+        }
+
+        let mut out = *self;
+
+        while n >= 64 {
+            let mut t = 0;
+            for i in out.0.iter_mut().rev() {
+                core::mem::swap(&mut t, i);
+            }
+            n -= 64;
+        }
+
+        if n > 0 {
+            let mut t = 0;
+            for i in out.0.iter_mut().rev() {
+                let t2 = *i << (64 - n);
+                *i >>= n;
+                *i |= t;
+                t = t2;
+            }
+        }
+
+        out
     }
 }
 
@@ -671,7 +819,7 @@ impl Field for Scalar {
         // (t - 1) // 2 = 6104339283789297388802252303364915521546564123189034618274734669823
         ff::helpers::sqrt_tonelli_shanks(
             self,
-            &[
+            [
                 0x7fff_2dff_7fff_ffff,
                 0x04d0_ec02_a9de_d201,
                 0x94ce_bea4_199c_ec04,
@@ -830,7 +978,6 @@ fn test_inv() {
     assert_eq!(inv, INV);
 }
 
-#[cfg(feature = "std")]
 #[test]
 fn test_debug() {
     assert_eq!(

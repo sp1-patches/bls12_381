@@ -27,9 +27,9 @@ use crate::Scalar;
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
 pub struct G2Affine {
-    pub(crate) x: Fp2,
-    pub(crate) y: Fp2,
-    infinity: Choice,
+    pub x: Fp2,
+    pub y: Fp2,
+    pub infinity: Choice,
 }
 
 impl Default for G2Affine {
@@ -101,7 +101,7 @@ impl PartialEq for G2Affine {
     }
 }
 
-impl<'a> Neg for &'a G2Affine {
+impl Neg for &G2Affine {
     type Output = G2Affine;
 
     #[inline]
@@ -123,38 +123,38 @@ impl Neg for G2Affine {
     }
 }
 
-impl<'a, 'b> Add<&'b G2Projective> for &'a G2Affine {
+impl<'a> Add<&'a G2Projective> for &G2Affine {
     type Output = G2Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G2Projective) -> G2Projective {
+    fn add(self, rhs: &'a G2Projective) -> G2Projective {
         rhs.add_mixed(self)
     }
 }
 
-impl<'a, 'b> Add<&'b G2Affine> for &'a G2Projective {
+impl<'a> Add<&'a G2Affine> for &G2Projective {
     type Output = G2Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G2Affine) -> G2Projective {
+    fn add(self, rhs: &'a G2Affine) -> G2Projective {
         self.add_mixed(rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G2Projective> for &'a G2Affine {
+impl<'a> Sub<&'a G2Projective> for &G2Affine {
     type Output = G2Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G2Projective) -> G2Projective {
+    fn sub(self, rhs: &'a G2Projective) -> G2Projective {
         self + (-rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G2Affine> for &'a G2Projective {
+impl<'a> Sub<&'a G2Affine> for &G2Projective {
     type Output = G2Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G2Affine) -> G2Projective {
+    fn sub(self, rhs: &'a G2Affine) -> G2Projective {
         self + (-rhs)
     }
 }
@@ -193,7 +193,24 @@ const B: Fp2 = Fp2 {
     ]),
 };
 
-const B3: Fp2 = Fp2::add(&Fp2::add(&B, &B), &B);
+const B3: Fp2 = Fp2 {
+    c0: Fp::from_raw_unchecked([
+        4933130441833534766,
+        15904462746612662304,
+        8034115857496836953,
+        12755092135412849606,
+        7007796720291435703,
+        252692002104915169,
+    ]),
+    c1: Fp::from_raw_unchecked([
+        4933130441833534766,
+        15904462746612662304,
+        8034115857496836953,
+        12755092135412849606,
+        7007796720291435703,
+        252692002104915169,
+    ]),
+};
 
 impl G2Affine {
     /// Returns the identity of the group: the point at infinity.
@@ -258,8 +275,8 @@ impl G2Affine {
 
         let mut res = [0; 96];
 
-        (&mut res[0..48]).copy_from_slice(&x.c1.to_bytes()[..]);
-        (&mut res[48..96]).copy_from_slice(&x.c0.to_bytes()[..]);
+        res[0..48].copy_from_slice(&x.c1.to_bytes()[..]);
+        res[48..96].copy_from_slice(&x.c0.to_bytes()[..]);
 
         // This point is in compressed form, so we set the most significant bit.
         res[0] |= 1u8 << 7;
@@ -493,9 +510,9 @@ impl G2Affine {
 #[cfg_attr(docsrs, doc(cfg(feature = "groups")))]
 #[derive(Copy, Clone, Debug)]
 pub struct G2Projective {
-    pub(crate) x: Fp2,
-    pub(crate) y: Fp2,
-    pub(crate) z: Fp2,
+    pub x: Fp2,
+    pub y: Fp2,
+    pub z: Fp2,
 }
 
 impl Default for G2Projective {
@@ -566,7 +583,7 @@ impl PartialEq for G2Projective {
     }
 }
 
-impl<'a> Neg for &'a G2Projective {
+impl Neg for &G2Projective {
     type Output = G2Projective;
 
     #[inline]
@@ -588,54 +605,54 @@ impl Neg for G2Projective {
     }
 }
 
-impl<'a, 'b> Add<&'b G2Projective> for &'a G2Projective {
+impl<'a> Add<&'a G2Projective> for &G2Projective {
     type Output = G2Projective;
 
     #[inline]
-    fn add(self, rhs: &'b G2Projective) -> G2Projective {
+    fn add(self, rhs: &'a G2Projective) -> G2Projective {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Sub<&'b G2Projective> for &'a G2Projective {
+impl<'a> Sub<&'a G2Projective> for &G2Projective {
     type Output = G2Projective;
 
     #[inline]
-    fn sub(self, rhs: &'b G2Projective) -> G2Projective {
+    fn sub(self, rhs: &'a G2Projective) -> G2Projective {
         self + (-rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a G2Projective {
+impl<'a> Mul<&'a Scalar> for &G2Projective {
     type Output = G2Projective;
 
-    fn mul(self, other: &'b Scalar) -> Self::Output {
+    fn mul(self, other: &'a Scalar) -> Self::Output {
         self.multiply(&other.to_bytes())
     }
 }
 
-impl<'a, 'b> Mul<&'b G2Projective> for &'a Scalar {
+impl<'a> Mul<&'a G2Projective> for &Scalar {
     type Output = G2Projective;
 
     #[inline]
-    fn mul(self, rhs: &'b G2Projective) -> Self::Output {
+    fn mul(self, rhs: &'a G2Projective) -> Self::Output {
         rhs * self
     }
 }
 
-impl<'a, 'b> Mul<&'b Scalar> for &'a G2Affine {
+impl<'a> Mul<&'a Scalar> for &G2Affine {
     type Output = G2Projective;
 
-    fn mul(self, other: &'b Scalar) -> Self::Output {
+    fn mul(self, other: &'a Scalar) -> Self::Output {
         G2Projective::from(self).multiply(&other.to_bytes())
     }
 }
 
-impl<'a, 'b> Mul<&'b G2Affine> for &'a Scalar {
+impl<'a> Mul<&'a G2Affine> for &Scalar {
     type Output = G2Projective;
 
     #[inline]
-    fn mul(self, rhs: &'b G2Affine) -> Self::Output {
+    fn mul(self, rhs: &'a G2Affine) -> Self::Output {
         rhs * self
     }
 }
@@ -646,9 +663,15 @@ impl_binops_multiplicative_mixed!(G2Affine, Scalar, G2Projective);
 impl_binops_multiplicative_mixed!(Scalar, G2Affine, G2Projective);
 impl_binops_multiplicative_mixed!(Scalar, G2Projective, G2Projective);
 
-#[inline(always)]
-fn mul_by_3b(x: Fp2) -> Fp2 {
-    x * B3
+#[inline]
+fn mul_by_3b(x: &Fp2) -> Fp2 {
+    B3 * x
+}
+
+#[inline]
+#[cfg(target_os = "zkvm")]
+fn mul_by_3b_inp(x: &mut Fp2) {
+    x.mul_inp(&B3);
 }
 
 impl G2Projective {
@@ -709,30 +732,63 @@ impl G2Projective {
     pub fn double(&self) -> G2Projective {
         // Algorithm 9, https://eprint.iacr.org/2015/1060.pdf
 
-        let t0 = self.y.square();
-        let z3 = t0 + t0;
-        let z3 = z3 + z3;
-        let z3 = z3 + z3;
-        let t1 = self.y * self.z;
-        let t2 = self.z.square();
-        let t2 = mul_by_3b(t2);
-        let x3 = t2 * z3;
-        let y3 = t0 + t2;
-        let z3 = t1 * z3;
-        let t1 = t2 + t2;
-        let t2 = t1 + t2;
-        let t0 = t0 - t2;
-        let y3 = t0 * y3;
-        let y3 = x3 + y3;
-        let t1 = self.x * self.y;
-        let x3 = t0 * t1;
-        let x3 = x3 + x3;
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut t0 = self.y.square();
+                let mut z3 = t0;
+                z3.double_inp();
+                z3.double_inp();
+                z3.double_inp();
+                let mut t2 = self.z.square();
+                mul_by_3b_inp(&mut t2);
+                let mut x3 = t2;
+                x3.mul_inp(&z3);
+                let mut y3 = t0;
+                y3.add_inp(&t2);
+                z3.mul_inp(&self.y);
+                z3.mul_inp(&self.z);
+                let tmp = t2;
+                t2.double_inp();
+                t2.add_inp(&tmp);
+                t0.sub_inp(&t2);
+                y3.mul_inp(&t0);
+                y3.add_inp(&x3);
+                t0.mul_inp(&self.x);
+                t0.mul_inp(&self.y);
+                t0.double_inp();
 
-        let tmp = G2Projective {
-            x: x3,
-            y: y3,
-            z: z3,
-        };
+                let tmp = G2Projective {
+                    x: t0,
+                    y: y3,
+                    z: z3,
+                };
+            } else {
+                let t0 = self.y.square();
+                let z3 = t0 + t0;
+                let z3 = z3 + z3;
+                let z3 = z3 + z3;
+                let t1 = self.y * self.z;
+                let t2 = self.z.square();
+                let t2 = mul_by_3b(&t2);
+                let x3 = t2 * z3;
+                let y3 = t0 + t2;
+                let z3 = t1 * z3;
+                let t1 = t2 + t2;
+                let t2 = t1 + t2;
+                let t0 = t0 - t2;
+                let y3 = t0 * y3;
+                let y3 = x3 + y3;
+                let t1 = self.x * self.y;
+                let x3 = t0 * t1;
+                let x3 = x3 + x3;
+
+                let tmp = G2Projective {
+                    x: x3,
+                    y: y3,
+                    z: z3,
+                };
+            }
+        }
 
         G2Projective::conditional_select(&tmp, &G2Projective::identity(), self.is_identity())
     }
@@ -741,44 +797,103 @@ impl G2Projective {
     pub fn add(&self, rhs: &G2Projective) -> G2Projective {
         // Algorithm 7, https://eprint.iacr.org/2015/1060.pdf
 
-        let t0 = self.x * rhs.x;
-        let t1 = self.y * rhs.y;
-        let t2 = self.z * rhs.z;
-        let t3 = self.x + self.y;
-        let t4 = rhs.x + rhs.y;
-        let t3 = t3 * t4;
-        let t4 = t0 + t1;
-        let t3 = t3 - t4;
-        let t4 = self.y + self.z;
-        let x3 = rhs.y + rhs.z;
-        let t4 = t4 * x3;
-        let x3 = t1 + t2;
-        let t4 = t4 - x3;
-        let x3 = self.x + self.z;
-        let y3 = rhs.x + rhs.z;
-        let x3 = x3 * y3;
-        let y3 = t0 + t2;
-        let y3 = x3 - y3;
-        let x3 = t0 + t0;
-        let t0 = x3 + t0;
-        let t2 = mul_by_3b(t2);
-        let z3 = t1 + t2;
-        let t1 = t1 - t2;
-        let y3 = mul_by_3b(y3);
-        let x3 = t4 * y3;
-        let t2 = t3 * t1;
-        let x3 = t2 - x3;
-        let y3 = y3 * t0;
-        let t1 = t1 * z3;
-        let y3 = t1 + y3;
-        let t0 = t0 * t3;
-        let z3 = z3 * t4;
-        let z3 = z3 + t0;
+        cfg_if::cfg_if! {
+            if #[cfg(target_os = "zkvm")] {
+                let mut t0 = self.x;
+                t0.mul_inp(&rhs.x);
+                let mut t1 = self.y;
+                t1.mul_inp(&rhs.y);
+                let mut t2 = self.z;
+                t2.mul_inp(&rhs.z);
+                let mut t3 = self.x;
+                t3.add_inp(&self.y);
+                let mut t4 = rhs.x;
+                t4.add_inp(&rhs.y);
+                t3.mul_inp(&t4);
+                t3.sub_inp(&t0);
+                t3.sub_inp(&t1);
+                let mut t4 = self.y;
+                t4.add_inp(&self.z);
+                let mut x3 = rhs.y;
+                x3.add_inp(&rhs.z);
+                t4.mul_inp(&x3);
+                t4.sub_inp(&t1);
+                t4.sub_inp(&t2);
+                let mut x3 = self.x;
+                x3.add_inp(&self.z);
+                let mut y3 = rhs.x;
+                y3.add_inp(&rhs.z);
+                x3.mul_inp(&y3);
+                let mut y3 = -t0;
+                y3.sub_inp(&t2);
+                y3.add_inp(&x3);
+                let mut x3 = t0;
+                x3.double_inp();
+                t0.add_inp(&x3);
+                mul_by_3b_inp(&mut t2);
+                let mut z3 = t1;
+                z3.add_inp(&t2);
+                t1.sub_inp(&t2);
+                mul_by_3b_inp(&mut y3);
+                let mut x3 = t4;
+                x3.mul_inp(&y3);
+                let mut t2 = t3;
+                t2.mul_inp(&t1);
+                x3 = -x3;
+                x3.add_inp(&t2);
+                y3.mul_inp(&t0);
+                t1.mul_inp(&z3);
+                y3.add_inp(&t1);
+                t0.mul_inp(&t3);
+                z3.mul_inp(&t4);
+                z3.add_inp(&t0);
 
-        G2Projective {
-            x: x3,
-            y: y3,
-            z: z3,
+                G2Projective {
+                    x: x3,
+                    y: y3,
+                    z: z3,
+                }
+            } else {
+                let t0 = self.x * rhs.x;
+                let t1 = self.y * rhs.y;
+                let t2 = self.z * rhs.z;
+                let t3 = self.x + self.y;
+                let t4 = rhs.x + rhs.y;
+                let t3 = t3 * t4;
+                let t4 = t0 + t1;
+                let t3 = t3 - t4;
+                let t4 = self.y + self.z;
+                let x3 = rhs.y + rhs.z;
+                let t4 = t4 * x3;
+                let x3 = t1 + t2;
+                let t4 = t4 - x3;
+                let x3 = self.x + self.z;
+                let y3 = rhs.x + rhs.z;
+                let x3 = x3 * y3;
+                let y3 = t0 + t2;
+                let y3 = x3 - y3;
+                let x3 = t0 + t0;
+                let t0 = x3 + t0;
+                let t2 = mul_by_3b(&t2);
+                let z3 = t1 + t2;
+                let t1 = t1 - t2;
+                let y3 = mul_by_3b(&y3);
+                let x3 = t4 * y3;
+                let t2 = t3 * t1;
+                let x3 = t2 - x3;
+                let y3 = y3 * t0;
+                let t1 = t1 * z3;
+                let y3 = t1 + y3;
+                let t0 = t0 * t3;
+                let z3 = z3 * t4;
+                let z3 = z3 + t0;
+
+                G2Projective {
+                    x: x3,
+                    y: y3,
+                    z: z3,
+                }
+            }
         }
     }
 
@@ -799,10 +914,10 @@ impl G2Projective {
         let y3 = y3 + self.x;
         let x3 = t0 + t0;
         let t0 = x3 + t0;
-        let t2 = mul_by_3b(self.z);
+        let t2 = mul_by_3b(&self.z);
         let z3 = t1 + t2;
         let t1 = t1 - t2;
-        let y3 = mul_by_3b(y3);
+        let y3 = mul_by_3b(&y3);
         let x3 = t4 * y3;
         let t2 = t3 * t1;
         let x3 = t2 - x3;
@@ -844,7 +959,7 @@ impl G2Projective {
         acc
     }
 
-    fn psi(&self) -> G2Projective {
+    pub fn psi(&self) -> G2Projective {
         // 1 / ((u+1) ^ ((q-1)/3))
         let psi_coeff_x = Fp2 {
             c0: Fp::zero(),
@@ -887,7 +1002,7 @@ impl G2Projective {
         }
     }
 
-    fn psi2(&self) -> G2Projective {
+    pub fn psi2(&self) -> G2Projective {
         // 1 / 2 ^ ((q-1)/3)
         let psi2_coeff_x = Fp2 {
             c0: Fp::from_raw_unchecked([
@@ -2185,4 +2300,9 @@ fn test_commutative_scalar_subgroup_multiplication() {
     // By value.
     assert_eq!(g2_p * a, a * g2_p);
     assert_eq!(g2_a * a, a * g2_a);
+}
+
+#[test]
+fn test_b3() {
+    assert_eq!(Fp2::add(&Fp2::add(&B, &B), &B), B3);
 }

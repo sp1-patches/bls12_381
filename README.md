@@ -1,4 +1,4 @@
-# bls12_381 [![Crates.io](https://img.shields.io/crates/v/bls12_381.svg)](https://crates.io/crates/bls12_381) #
+# sp1_bls12_381 [![Crates.io](https://img.shields.io/crates/v/sp1_bls12_381.svg)](https://crates.io/crates/sp1_bls12_381) #
 
 This crate provides an implementation of the BLS12-381 pairing-friendly elliptic curve construction.
 
@@ -70,3 +70,15 @@ Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0
 license, shall be dual licensed as above, without any additional terms or
 conditions.
+
+### Release Note 
+
+The package in the tag release `v0.8.0` uses the name `sp1_bls12_381` to avoid conflict with the `bls12_381` from `zkcrypto`. If you want to use this crate as a `bls12_381` patch, import it directly as `bls12_381` without the `sp1_` prefix.
+```toml
+bls12_381 = { git = "https://github.com/sp1-patches/bls12_381", branch= "patch-v0.8.0" }
+```
+
+Otherwise if you want to use the original `sp1_bls12_381` package, you can use the following import:
+```toml
+bls12_381 = { git = "https://github.com/sp1-patches/bls12_381", package = "sp1_bls12_381" }
+```
