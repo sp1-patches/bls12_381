@@ -76,7 +76,7 @@ features = ["alloc"]
 optional = true
 
 [target.'cfg(target_os = "zkvm")'.dependencies.sp1-lib]
-version = "4.0.0"
+version = "5.0.0"
 default-features = false
 
 [features]
