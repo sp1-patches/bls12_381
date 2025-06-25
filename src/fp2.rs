@@ -264,8 +264,8 @@ impl Fp2 {
     pub fn square_inp(&mut self) {
         unsafe {
             syscall_bls12381_fp2_mulmod(
-                self.c0.0.as_mut_ptr() as *mut u32,
-                self.c0.0.as_ptr() as *const u32,
+                self.c0.0.as_mut_ptr() as *mut u64,
+                self.c0.0.as_ptr() as *const u64,
             );
         }
         self.mul_r_inv_internal();
@@ -300,7 +300,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_mulmod(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp2_mulmod(out.c0.0.as_mut_ptr() as *mut u64, self.c0.0.as_ptr() as *const u64);
                 }
                 out.mul_r_inv_internal();
                 out
@@ -315,8 +315,8 @@ impl Fp2 {
     pub fn mul_inp(&mut self, rhs: &Fp2) {
         unsafe {
             syscall_bls12381_fp2_mulmod(
-                self.c0.0.as_mut_ptr() as *mut u32,
-                rhs.c0.0.as_ptr() as *const u32,
+                self.c0.0.as_mut_ptr() as *mut u64,
+                rhs.c0.0.as_ptr() as *const u64,
             );
         }
         self.mul_r_inv_internal();
@@ -347,7 +347,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_mulmod(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp2_mulmod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
                 }
                 out.mul_r_inv_internal();
                 out
@@ -362,8 +362,8 @@ impl Fp2 {
     pub fn add_inp(&mut self, rhs: &Fp2) {
         unsafe {
             syscall_bls12381_fp2_addmod(
-                self.c0.0.as_mut_ptr() as *mut u32,
-                rhs.c0.0.as_ptr() as *const u32,
+                self.c0.0.as_mut_ptr() as *mut u64,
+                rhs.c0.0.as_ptr() as *const u64,
             );
         }
     }
@@ -373,8 +373,8 @@ impl Fp2 {
     pub fn double_inp(&mut self) {
         unsafe {
             syscall_bls12381_fp2_addmod(
-                self.c0.0.as_mut_ptr() as *mut u32,
-                self.c0.0.as_ptr() as *const u32,
+                self.c0.0.as_mut_ptr() as *mut u64,
+                self.c0.0.as_ptr() as *const u64,
             );
         }
     }
@@ -392,7 +392,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_addmod(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp2_addmod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -406,8 +406,8 @@ impl Fp2 {
     pub fn sub_inp(&mut self, rhs: &Fp2) {
         unsafe {
             syscall_bls12381_fp2_submod(
-                self.c0.0.as_mut_ptr() as *mut u32,
-                rhs.c0.0.as_ptr() as *const u32,
+                self.c0.0.as_mut_ptr() as *mut u64,
+                rhs.c0.0.as_ptr() as *const u64,
             );
         }
     }
@@ -426,7 +426,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u32, rhs.c0.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -451,7 +451,7 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = Fp2::zero();
                 unsafe {
-                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u32, self.c0.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u64, self.c0.0.as_ptr() as *const u64);
                 }
                 out
             } else {

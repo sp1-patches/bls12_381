@@ -487,8 +487,8 @@ impl Fp {
     pub fn add_inp(&mut self, rhs: &Fp) {
         unsafe {
             syscall_bls12381_fp_addmod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
+                self.0.as_mut_ptr() as *mut u64,
+                rhs.0.as_ptr() as *const u64,
             );
         }
     }
@@ -514,7 +514,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_addmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_addmod(out.0.as_mut_ptr() as *mut u64, rhs.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -554,7 +554,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = Fp::zero();
                 unsafe {
-                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u64, self.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -568,8 +568,8 @@ impl Fp {
     pub fn sub_inp(&mut self, rhs: &Fp) {
         unsafe {
             syscall_bls12381_fp_submod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
+                self.0.as_mut_ptr() as *mut u64,
+                rhs.0.as_ptr() as *const u64,
             );
         }
     }
@@ -580,7 +580,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_submod(out.0.as_mut_ptr() as *mut u64, rhs.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -753,8 +753,8 @@ impl Fp {
     pub fn mul_inp(&mut self, rhs: &Fp) {
         unsafe {
             syscall_bls12381_fp_mulmod(
-                self.0.as_mut_ptr() as *mut u32,
-                rhs.0.as_ptr() as *const u32,
+                self.0.as_mut_ptr() as *mut u64,
+                rhs.0.as_ptr() as *const u64,
             );
         }
         self.mul_r_inv_internal();
@@ -814,7 +814,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u32, rhs.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u64, rhs.0.as_ptr() as *const u64);
                 }
                 out.mul_r_inv_internal();
                 out
@@ -832,8 +832,8 @@ impl Fp {
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
             syscall_bls12381_fp_mulmod(
-                self.0.as_mut_ptr() as *mut u32,
-                R_INV.0.as_ptr() as *const u32,
+                self.0.as_mut_ptr() as *mut u64,
+                R_INV.0.as_ptr() as *const u64,
             );
         }
     }
@@ -845,7 +845,7 @@ impl Fp {
     #[cfg(target_os = "zkvm")]
     pub(crate) fn mul_r_internal(&mut self) {
         unsafe {
-            syscall_bls12381_fp_mulmod(self.0.as_mut_ptr() as *mut u32, R.0.as_ptr() as *const u32);
+            syscall_bls12381_fp_mulmod(self.0.as_mut_ptr() as *mut u64, R.0.as_ptr() as *const u64);
         }
     }
 
@@ -854,8 +854,8 @@ impl Fp {
     pub fn square_inp(&mut self) {
         unsafe {
             syscall_bls12381_fp_mulmod(
-                self.0.as_mut_ptr() as *mut u32,
-                self.0.as_ptr() as *const u32,
+                self.0.as_mut_ptr() as *mut u64,
+                self.0.as_ptr() as *const u64,
             );
         }
         self.mul_r_inv_internal();
@@ -918,7 +918,7 @@ impl Fp {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u32, self.0.as_ptr() as *const u32);
+                    syscall_bls12381_fp_mulmod(out.0.as_mut_ptr() as *mut u64, self.0.as_ptr() as *const u64);
                 }
                 out.mul_r_inv_internal();
                 out

@@ -90,27 +90,19 @@ const MODULUS: Scalar = Scalar([
 
 /// The modulus as u32 limbs.
 #[cfg(target_os = "zkvm")]
-const MODULUS_LIMBS_32: [u32; 8] = [
-    0x0000_0001,
-    0xffff_ffff,
-    0xfffe_5bfe,
-    0x53bd_a402,
-    0x09a1_d805,
-    0x3339_d808,
-    0x299d_7d48,
-    0x73ed_a753,
+const MODULUS_LIMBS_32: [u64; 4] = [
+    0x0000_0001_ffff_ffff,
+    0xfffe_5bfe_53bd_a402,
+    0x09a1_d805_3339_d808,
+    0x299d_7d48_73ed_a753,
 ];
 
 #[cfg(target_os = "zkvm")]
-const R_INV: [u32; 8] = [
-    0xfe75_c040,
-    0x13f7_5b69,
-    0x09dc_705f,
-    0xab6f_ca8f,
-    0x4f77_266a,
-    0x7204_078a,
-    0x3000_9d57,
-    0x1bbe_8693,
+const R_INV: [u64; 4] = [
+    0xfe75_c040_13f7_5b69,
+    0x09dc_705f_ab6f_ca8f,
+    0x4f77_266a_7204_078a,
+    0x3000_9d57_1bbe_8693,
 ];
 
 // The number of bits needed to represent the modulus.
@@ -623,9 +615,9 @@ impl Scalar {
     pub(crate) fn mul_r_inv_internal(&mut self) {
         unsafe {
             sys_bigint(
-                self.0.as_mut_ptr() as *mut [u32; 8],
+                self.0.as_mut_ptr() as *mut [u64; 4],
                 0,
-                self.0.as_ptr() as *const [u32; 8],
+                self.0.as_ptr() as *const [u64; 4],
                 &R_INV,
                 &MODULUS_LIMBS_32,
             );
@@ -638,10 +630,10 @@ impl Scalar {
             if #[cfg(target_os = "zkvm")] {
                 unsafe {
                     sys_bigint(
-                        self.0.as_mut_ptr() as *mut[u32; 8],
+                        self.0.as_mut_ptr() as *mut[u64; 4],
                         0,
-                        self.0.as_ptr() as *const [u32; 8],
-                        rhs.0.as_ptr() as *const [u32; 8],
+                        self.0.as_ptr() as *const [u64; 4],
+                        rhs.0.as_ptr() as *const [u64; 4],
                         &MODULUS_LIMBS_32,
                     );
                 }
@@ -861,7 +853,7 @@ impl PrimeField for Scalar {
 }
 
 #[cfg(all(feature = "bits", not(target_pointer_width = "64")))]
-type ReprBits = [u32; 8];
+type ReprBits = [u64; 4];
 
 #[cfg(all(feature = "bits", target_pointer_width = "64"))]
 type ReprBits = [u64; 4];

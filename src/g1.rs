@@ -450,7 +450,7 @@ impl G1Affine {
                     other.x.mul_r_inv_internal();
                     other.y.mul_r_inv_internal();
                     unsafe {
-                        syscall_bls12381_add(res.x.0.as_mut_ptr() as *mut [u32; 24], other.x.0.as_ptr() as *const [u32; 24]);
+                        syscall_bls12381_add(res.x.0.as_mut_ptr() as *mut [u64; 12], other.x.0.as_ptr() as *const [u64; 12]);
                     }
                     res.x.mul_r_internal();
                     res.y.mul_r_internal();
@@ -461,7 +461,7 @@ impl G1Affine {
                     res.x.mul_r_inv_internal();
                     res.y.mul_r_inv_internal();
                     unsafe {
-                        syscall_bls12381_double(res.x.0.as_mut_ptr() as *mut [u32; 24]);
+                        syscall_bls12381_double(res.x.0.as_mut_ptr() as *mut [u64; 12]);
                     }
                     res.x.mul_r_internal();
                     res.y.mul_r_internal();
@@ -489,7 +489,7 @@ impl G1Affine {
                 self.x.mul_r_inv_internal();
                 self.y.mul_r_inv_internal();
                 unsafe {
-                    syscall_bls12381_double(self.x.0.as_mut_ptr() as *mut [u32; 24]);
+                    syscall_bls12381_double(self.x.0.as_mut_ptr() as *mut [u64; 12]);
                 }
                 self.x.mul_r_internal();
                 self.y.mul_r_internal();
