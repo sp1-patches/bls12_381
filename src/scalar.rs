@@ -88,21 +88,12 @@ const MODULUS: Scalar = Scalar([
     0x73ed_a753_299d_7d48,
 ]);
 
-/// The modulus as u32 limbs.
-#[cfg(target_os = "zkvm")]
-const MODULUS_LIMBS_32: [u64; 4] = [
-    0x0000_0001_ffff_ffff,
-    0xfffe_5bfe_53bd_a402,
-    0x09a1_d805_3339_d808,
-    0x299d_7d48_73ed_a753,
-];
-
 #[cfg(target_os = "zkvm")]
 const R_INV: [u64; 4] = [
-    0xfe75_c040_13f7_5b69,
-    0x09dc_705f_ab6f_ca8f,
-    0x4f77_266a_7204_078a,
-    0x3000_9d57_1bbe_8693,
+    0x13f7_5b69_fe75_c040,
+    0xab6f_ca8f_09dc_705f,
+    0x7204_078a_4f77_266a,
+    0x1bbe_8693_3000_9d57
 ];
 
 // The number of bits needed to represent the modulus.
@@ -619,7 +610,7 @@ impl Scalar {
                 0,
                 self.0.as_ptr() as *const [u64; 4],
                 &R_INV,
-                &MODULUS_LIMBS_32,
+                MODULUS.0.as_ptr() as *const [u64; 4],
             );
         }
     }
@@ -634,7 +625,7 @@ impl Scalar {
                         0,
                         self.0.as_ptr() as *const [u64; 4],
                         rhs.0.as_ptr() as *const [u64; 4],
-                        &MODULUS_LIMBS_32,
+                        MODULUS.0.as_ptr() as *const [u64; 4],
                     );
                 }
                 self.mul_r_inv_internal();
@@ -891,7 +882,7 @@ impl PrimeFieldBits for Scalar {
     fn char_le_bits() -> FieldBits<Self::ReprBits> {
         #[cfg(not(target_pointer_width = "64"))]
         {
-            FieldBits::new(MODULUS_LIMBS_32)
+            FieldBits::new(MODULUS.0.as_ptr())
         }
 
         #[cfg(target_pointer_width = "64")]
