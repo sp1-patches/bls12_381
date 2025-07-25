@@ -14,7 +14,7 @@ use {
         unconstrained,
     },
     sp1_lib::{
-        syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_mulmod, syscall_bls12381_fp2_submod,
+        syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bls12381_fp2_mulmod
     },
 };
 
@@ -361,9 +361,13 @@ impl Fp2 {
     #[cfg(target_os = "zkvm")]
     pub fn add_inp(&mut self, rhs: &Fp2) {
         unsafe {
-            syscall_bls12381_fp2_addmod(
+            syscall_bls12381_fp_addmod(
                 self.c0.0.as_mut_ptr() as *mut u64,
                 rhs.c0.0.as_ptr() as *const u64,
+            );
+            syscall_bls12381_fp_addmod(
+                self.c1.0.as_mut_ptr() as *mut u64,
+                rhs.c1.0.as_ptr() as *const u64,
             );
         }
     }
@@ -372,9 +376,13 @@ impl Fp2 {
     #[cfg(target_os = "zkvm")]
     pub fn double_inp(&mut self) {
         unsafe {
-            syscall_bls12381_fp2_addmod(
+            syscall_bls12381_fp_addmod(
                 self.c0.0.as_mut_ptr() as *mut u64,
                 self.c0.0.as_ptr() as *const u64,
+            );
+            syscall_bls12381_fp_addmod(
+                self.c1.0.as_mut_ptr() as *mut u64,
+                self.c1.0.as_ptr() as *const u64,
             );
         }
     }
@@ -392,7 +400,8 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_addmod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_addmod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_addmod(out.c1.0.as_mut_ptr() as *mut u64, rhs.c1.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -405,9 +414,13 @@ impl Fp2 {
     #[cfg(target_os = "zkvm")]
     pub fn sub_inp(&mut self, rhs: &Fp2) {
         unsafe {
-            syscall_bls12381_fp2_submod(
+            syscall_bls12381_fp_submod(
                 self.c0.0.as_mut_ptr() as *mut u64,
                 rhs.c0.0.as_ptr() as *const u64,
+            );
+            syscall_bls12381_fp_submod(
+                self.c1.0.as_mut_ptr() as *mut u64,
+                rhs.c1.0.as_ptr() as *const u64,
             );
         }
     }
@@ -426,7 +439,8 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = self.clone();
                 unsafe {
-                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_submod(out.c0.0.as_mut_ptr() as *mut u64, rhs.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_submod(out.c1.0.as_mut_ptr() as *mut u64, rhs.c1.0.as_ptr() as *const u64);
                 }
                 out
             } else {
@@ -451,7 +465,8 @@ impl Fp2 {
             if #[cfg(target_os = "zkvm")] {
                 let mut out = Fp2::zero();
                 unsafe {
-                    syscall_bls12381_fp2_submod(out.c0.0.as_mut_ptr() as *mut u64, self.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_submod(out.c0.0.as_mut_ptr() as *mut u64, self.c0.0.as_ptr() as *const u64);
+                    syscall_bls12381_fp_submod(out.c1.0.as_mut_ptr() as *mut u64, self.c1.0.as_ptr() as *const u64);
                 }
                 out
             } else {
