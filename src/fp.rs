@@ -405,14 +405,14 @@ impl Fp {
                 0 => {
                     let root = Fp::from_bytes(&byte_vec).unwrap();
 
-                    assert!(root * root == *self * nqr);
+                    assert!(root * root == *self * nqr, "Invalid hint: Fp sqrt, non-quadratic residue");
 
                     CtOption::new(Fp::zero(), Choice::from(0u8))
                 }
                 _ => {
                     let root = Fp::from_bytes(&byte_vec).unwrap();
 
-                    assert!(root * root == *self);
+                    assert!(root * root == *self, "Invalid hint: Fp sqrt");
 
                     CtOption::new(root, Choice::from(1u8))
                 }
@@ -456,7 +456,7 @@ impl Fp {
 
             assert!(self * &inv == Fp::one(), "Invalid hint: Fp invert");
 
-            CtOption::new(inv, (self * inv).ct_eq(&Fp::one()))
+            CtOption::new(inv, Choice::from(1u8))
         }
 
         #[cfg(not(target_os = "zkvm"))]
