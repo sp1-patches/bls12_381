@@ -534,6 +534,7 @@ impl Scalar {
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
+            assert_eq!(byte_vec.len(), 32);
 
             // Safety: 
             //
@@ -541,7 +542,7 @@ impl Scalar {
             // and the executor always pushes to the front of the input buffer.
             //
             // `from_scalar` just clones the bytes before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8;32]) }; 
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) }; 
             let inv = Scalar::from_bytes(bytes).unwrap();
 
             assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");

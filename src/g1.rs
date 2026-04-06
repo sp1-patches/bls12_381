@@ -25,7 +25,7 @@ cfg_if::cfg_if! {
 }
 // Accelerated precompiles for zkvm. Defined directly to prevent circular dependency issues.
 #[cfg(target_os = "zkvm")]
-use sp1_lib::{bls12381::decompress_pubkey, syscall_bls12381_add, syscall_bls12381_double};
+use sp1_lib::{syscall_bls12381_add, syscall_bls12381_double};
 
 /// This is an element of $\mathbb{G}_1$ represented in the affine coordinate space.
 /// It is ideal to keep elements in this representation to reduce memory usage and
@@ -37,9 +37,9 @@ use sp1_lib::{bls12381::decompress_pubkey, syscall_bls12381_add, syscall_bls1238
 #[derive(Copy, Clone, Debug)]
 #[repr(C)] // NOTE: this is technically required for ensuring the memory layout used in the zkvm precompiles is valid
 pub struct G1Affine {
-    pub x: Fp,
-    pub y: Fp,
-    pub infinity: Choice,
+    pub(crate) x: Fp,
+    pub(crate) y: Fp,
+    pub(crate) infinity: Choice,
 }
 
 impl Default for G1Affine {
