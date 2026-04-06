@@ -534,6 +534,7 @@ impl Scalar {
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
+            assert_eq!(byte_vec.len(), 32);
 
             // Safety:
             //

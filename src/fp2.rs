@@ -580,6 +580,7 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
+            assert_eq!(byte_vec.len(), 97);
             let status = byte_vec[96];
 
             // Safety:
@@ -663,9 +664,10 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
+            assert_eq!(byte_vec.len(), 96);
 
             // Safety:
-            // - the length of the byte_vec is guaranteed to be 48, since we just pushed it.
+            // - the length of the byte_vec is guaranteed to be 96, since we just pushed it.
             // - the executor pushes to the front.
             // - the ref is only cloned from before byte_vec is dropped.
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
