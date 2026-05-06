@@ -535,7 +535,7 @@ impl Scalar {
             }
             let byte_vec = read_vec();
             if byte_vec.len() != 32 {
-                crate::halt_invalid_hint();
+                sp1_lib::halt_invalid_hint();
             }
 
             // Safety:
@@ -547,11 +547,11 @@ impl Scalar {
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) };
             let inv = match Option::<Scalar>::from(Scalar::from_bytes(bytes)) {
                 Some(v) => v,
-                None => crate::halt_invalid_hint(),
+                None => sp1_lib::halt_invalid_hint(),
             };
 
             if self * &inv != Scalar::one() {
-                crate::halt_invalid_hint();
+                sp1_lib::halt_invalid_hint();
             }
             return CtOption::new(inv, Choice::from(1u8));
         }

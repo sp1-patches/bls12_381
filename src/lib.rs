@@ -48,14 +48,6 @@ mod scalar;
 
 pub use scalar::Scalar;
 
-/// On invalid prover hints, halt the zkVM with exit code 3 instead of panicking.
-/// This prevents a malicious prover from forging a regular `panic` (exit code 1).
-#[cfg(target_os = "zkvm")]
-#[inline(never)]
-pub(crate) fn halt_invalid_hint() -> ! {
-    unsafe { sp1_lib::syscall_halt(3) }
-}
-
 #[cfg(feature = "groups")]
 pub mod fp;
 #[cfg(feature = "groups")]

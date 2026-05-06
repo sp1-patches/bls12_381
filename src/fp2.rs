@@ -581,7 +581,7 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 97 {
-                crate::halt_invalid_hint();
+                sp1_lib::halt_invalid_hint();
             }
             let status = byte_vec[96];
 
@@ -598,12 +598,12 @@ impl Fp2 {
                     // We can verify this using the nqr trick.
                     let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                         Some(r) => r,
-                        None => crate::halt_invalid_hint(),
+                        None => sp1_lib::halt_invalid_hint(),
                     };
                     let has_root = self * nqr;
 
                     if root * root != has_root {
-                        crate::halt_invalid_hint();
+                        sp1_lib::halt_invalid_hint();
                     }
 
                     CtOption::new(Self::zero(), Choice::from(0u8))
@@ -612,11 +612,11 @@ impl Fp2 {
                     // The high byte is non-zero, so we should have a sqrt.
                     let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                         Some(r) => r,
-                        None => crate::halt_invalid_hint(),
+                        None => sp1_lib::halt_invalid_hint(),
                     };
 
                     if root * root != *self {
-                        crate::halt_invalid_hint();
+                        sp1_lib::halt_invalid_hint();
                     }
 
                     CtOption::new(root, Choice::from(1u8))
@@ -677,7 +677,7 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 96 {
-                crate::halt_invalid_hint();
+                sp1_lib::halt_invalid_hint();
             }
 
             // Safety:
@@ -687,11 +687,11 @@ impl Fp2 {
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
             let inv = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                 Some(v) => v,
-                None => crate::halt_invalid_hint(),
+                None => sp1_lib::halt_invalid_hint(),
             };
 
             if *self * inv != Fp2::one() {
-                crate::halt_invalid_hint();
+                sp1_lib::halt_invalid_hint();
             }
 
             CtOption::new(inv, Choice::from(1u8))
