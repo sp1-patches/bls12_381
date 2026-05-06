@@ -580,7 +580,9 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
-            assert_eq!(byte_vec.len(), 97);
+            if byte_vec.len() != 97 {
+                crate::halt_invalid_hint();
+            }
             let status = byte_vec[96];
 
             // Safety:
@@ -594,18 +596,28 @@ impl Fp2 {
                     // The hint indicates does not have a square root
                     //
                     // We can verify this using the nqr trick.
-                    let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
+                    let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
+                        Some(r) => r,
+                        None => crate::halt_invalid_hint(),
+                    };
                     let has_root = self * nqr;
 
-                    assert_eq!(root * root, has_root, "Invalid hint: square root for Fp2");
+                    if root * root != has_root {
+                        crate::halt_invalid_hint();
+                    }
 
                     CtOption::new(Self::zero(), Choice::from(0u8))
                 }
                 _ => {
                     // The high byte is non-zero, so we should have a sqrt.
-                    let root = Fp2::from_bytes(&bytes[0..96].try_into().unwrap()).unwrap();
+                    let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
+                        Some(r) => r,
+                        None => crate::halt_invalid_hint(),
+                    };
 
-                    assert_eq!(root * root, *self, "Invalid hint: square root for Fp2 sqrt");
+                    if root * root != *self {
+                        crate::halt_invalid_hint();
+                    }
 
                     CtOption::new(root, Choice::from(1u8))
                 }
@@ -664,16 +676,23 @@ impl Fp2 {
             }
 
             let byte_vec = read_vec();
-            assert_eq!(byte_vec.len(), 96);
+            if byte_vec.len() != 96 {
+                crate::halt_invalid_hint();
+            }
 
             // Safety:
             // - the length of the byte_vec is guaranteed to be 96, since we just pushed it.
             // - the executor pushes to the front.
             // - the ref is only cloned from before byte_vec is dropped.
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
-            let inv = Fp2::from_bytes(bytes).unwrap();
+            let inv = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
+                Some(v) => v,
+                None => crate::halt_invalid_hint(),
+            };
 
-            assert!(*self * inv == Fp2::one(), "Invalid hint: inverse for Fp2");
+            if *self * inv != Fp2::one() {
+                crate::halt_invalid_hint();
+            }
 
             CtOption::new(inv, Choice::from(1u8))
         }

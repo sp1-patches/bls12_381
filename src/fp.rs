@@ -397,22 +397,39 @@ impl Fp {
             }
 
             // The first byte is the status of the sqrt syscall.
-            let status = read_vec()[0];
+            let status_vec = read_vec();
+            if status_vec.is_empty() {
+                crate::halt_invalid_hint();
+            }
+            let status = status_vec[0];
             // Assert the hook only writes back 48 bytes.
-            let byte_vec = read_vec().try_into().unwrap();
+            let byte_vec: [u8; 48] = match read_vec().try_into() {
+                Ok(v) => v,
+                Err(_) => crate::halt_invalid_hint(),
+            };
 
             match status {
                 0 => {
-                    let root = Fp::from_bytes(&byte_vec).unwrap();
+                    let root = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                        Some(r) => r,
+                        None => crate::halt_invalid_hint(),
+                    };
 
-                    assert!(root * root == *self * nqr, "Invalid hint: Fp sqrt, non-quadratic residue");
+                    if root * root != *self * nqr {
+                        crate::halt_invalid_hint();
+                    }
 
                     CtOption::new(Fp::zero(), Choice::from(0u8))
                 }
                 _ => {
-                    let root = Fp::from_bytes(&byte_vec).unwrap();
+                    let root = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                        Some(r) => r,
+                        None => crate::halt_invalid_hint(),
+                    };
 
-                    assert!(root * root == *self, "Invalid hint: Fp sqrt");
+                    if root * root != *self {
+                        crate::halt_invalid_hint();
+                    }
 
                     CtOption::new(root, Choice::from(1u8))
                 }
@@ -450,11 +467,19 @@ impl Fp {
                 sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_INVERSE, &self.to_bytes());
             }
 
-            let byte_vec = read_vec().try_into().unwrap();
+            let byte_vec: [u8; 48] = match read_vec().try_into() {
+                Ok(v) => v,
+                Err(_) => crate::halt_invalid_hint(),
+            };
 
-            let inv = Fp::from_bytes(&byte_vec).unwrap();
+            let inv = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                Some(v) => v,
+                None => crate::halt_invalid_hint(),
+            };
 
-            assert!(self * &inv == Fp::one(), "Invalid hint: Fp invert");
+            if self * &inv != Fp::one() {
+                crate::halt_invalid_hint();
+            }
 
             CtOption::new(inv, Choice::from(1u8))
         }
