@@ -581,7 +581,10 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 97 {
-                sp1_lib::halt_invalid_hint();
+                sp1_lib::invalid_hint!(
+                    "Fp2 sqrt: hint length is {}, expected 97",
+                    byte_vec.len()
+                );
             }
             let status = byte_vec[96];
 
@@ -598,12 +601,16 @@ impl Fp2 {
                     // We can verify this using the nqr trick.
                     let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                         Some(r) => r,
-                        None => sp1_lib::halt_invalid_hint(),
+                        None => sp1_lib::invalid_hint!(
+                            "Fp2 sqrt: NQR-root hint is not canonical"
+                        ),
                     };
                     let has_root = self * nqr;
 
                     if root * root != has_root {
-                        sp1_lib::halt_invalid_hint();
+                        sp1_lib::invalid_hint!(
+                            "Fp2 sqrt: NQR-root hint failed root^2 = self*nqr"
+                        );
                     }
 
                     CtOption::new(Self::zero(), Choice::from(0u8))
@@ -612,11 +619,11 @@ impl Fp2 {
                     // The high byte is non-zero, so we should have a sqrt.
                     let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                         Some(r) => r,
-                        None => sp1_lib::halt_invalid_hint(),
+                        None => sp1_lib::invalid_hint!("Fp2 sqrt: root hint is not canonical"),
                     };
 
                     if root * root != *self {
-                        sp1_lib::halt_invalid_hint();
+                        sp1_lib::invalid_hint!("Fp2 sqrt: root hint failed root^2 = self");
                     }
 
                     CtOption::new(root, Choice::from(1u8))
@@ -677,7 +684,10 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 96 {
-                sp1_lib::halt_invalid_hint();
+                sp1_lib::invalid_hint!(
+                    "Fp2 inverse: hint length is {}, expected 96",
+                    byte_vec.len()
+                );
             }
 
             // Safety:
@@ -687,11 +697,11 @@ impl Fp2 {
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
             let inv = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
                 Some(v) => v,
-                None => sp1_lib::halt_invalid_hint(),
+                None => sp1_lib::invalid_hint!("Fp2 inverse: hint is not canonical"),
             };
 
             if *self * inv != Fp2::one() {
-                sp1_lib::halt_invalid_hint();
+                sp1_lib::invalid_hint!("Fp2 inverse: hint did not invert self");
             }
 
             CtOption::new(inv, Choice::from(1u8))
