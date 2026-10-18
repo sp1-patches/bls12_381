@@ -531,7 +531,23 @@ impl Fp2 {
     }
 
     #[inline]
+    /// Returns the smaller root with c1 first; this may differ from the original crate.
     pub fn sqrt(&self) -> CtOption<Self> {
+        fn canonical_root(root: Fp2) -> Fp2 {
+            #[cfg(target_os = "zkvm")]
+            {
+                if bool::from(root.lexicographically_largest()) {
+                    -root
+                } else {
+                    root
+                }
+            }
+            #[cfg(not(target_os = "zkvm"))]
+            {
+                Fp2::conditional_select(&root, &-root, root.lexicographically_largest())
+            }
+        }
+
         #[cfg(target_os = "zkvm")]
         {
             if self.is_zero().into() {
@@ -588,23 +604,23 @@ impl Fp2 {
             }
             let status = byte_vec[96];
 
-            // Safety:
-            // - the length of the byte_vec is guaranteed to be 97, since we just pushed it.
-            // - the executor pushes to the front.
-            // - the ref is only cloned from before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 96]) };
+            let c0_bytes: &[u8; 48] = byte_vec[..48].try_into().unwrap();
+            let c1_bytes: &[u8; 48] = byte_vec[48..96].try_into().unwrap();
+            let c0 = match Option::<Fp>::from(Fp::from_bytes(c0_bytes)) {
+                Some(c0) => c0,
+                None => sp1_lib::invalid_hint!("Fp2 sqrt: root c0 hint is not canonical"),
+            };
+            let c1 = match Option::<Fp>::from(Fp::from_bytes(c1_bytes)) {
+                Some(c1) => c1,
+                None => sp1_lib::invalid_hint!("Fp2 sqrt: root c1 hint is not canonical"),
+            };
+            let root = Fp2 { c0, c1 };
 
             match status {
                 0 => {
                     // The hint indicates does not have a square root
                     //
                     // We can verify this using the nqr trick.
-                    let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
-                        Some(r) => r,
-                        None => sp1_lib::invalid_hint!(
-                            "Fp2 sqrt: NQR-root hint is not canonical"
-                        ),
-                    };
                     let has_root = self * nqr;
 
                     if root * root != has_root {
@@ -617,23 +633,18 @@ impl Fp2 {
                 }
                 _ => {
                     // The high byte is non-zero, so we should have a sqrt.
-                    let root = match Option::<Fp2>::from(Fp2::from_bytes(bytes)) {
-                        Some(r) => r,
-                        None => sp1_lib::invalid_hint!("Fp2 sqrt: root hint is not canonical"),
-                    };
-
                     if root * root != *self {
                         sp1_lib::invalid_hint!("Fp2 sqrt: root hint failed root^2 = self");
                     }
 
-                    CtOption::new(root, Choice::from(1u8))
+                    CtOption::new(canonical_root(root), Choice::from(1u8))
                 }
             }
         }
 
         #[cfg(not(target_os = "zkvm"))]
         {
-            self.cpu_sqrt()
+            self.cpu_sqrt().map(canonical_root)
         }
     }
 

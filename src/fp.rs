@@ -377,7 +377,23 @@ impl Fp {
     }
 
     #[inline]
+    /// Returns the smaller root, which may differ from the original crate.
     pub fn sqrt(&self) -> CtOption<Self> {
+        fn canonical_root(root: Fp) -> Fp {
+            #[cfg(target_os = "zkvm")]
+            {
+                if bool::from(root.lexicographically_largest()) {
+                    -root
+                } else {
+                    root
+                }
+            }
+            #[cfg(not(target_os = "zkvm"))]
+            {
+                Fp::conditional_select(&root, &-root, root.lexicographically_largest())
+            }
+        }
+
         #[cfg(target_os = "zkvm")]
         {
             if self.is_zero().into() {
@@ -431,13 +447,13 @@ impl Fp {
                         sp1_lib::invalid_hint!("Fp sqrt: root hint failed root^2 = self");
                     }
 
-                    CtOption::new(root, Choice::from(1u8))
+                    CtOption::new(canonical_root(root), Choice::from(1u8))
                 }
             }
         }
 
         #[cfg(not(target_os = "zkvm"))]
-        self.cpu_sqrt()
+        self.cpu_sqrt().map(canonical_root)
     }
 
     #[inline]
@@ -1198,9 +1214,7 @@ fn test_sqrt() {
     ]);
 
     assert_eq!(
-        // sqrt(4) = -2
-        -a.sqrt().unwrap(),
-        // 2
+        a.sqrt().unwrap(),
         Fp::from_raw_unchecked([
             0x3213_0000_0006_554f,
             0xb93c_0018_d6c4_0005,
