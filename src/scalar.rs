@@ -534,7 +534,12 @@ impl Scalar {
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
-            assert_eq!(byte_vec.len(), 32);
+            if byte_vec.len() != 32 {
+                sp1_lib::invalid_hint!(
+                    "Scalar inverse: hint length is {}, expected 32",
+                    byte_vec.len()
+                );
+            }
 
             // Safety: 
             //
@@ -543,9 +548,14 @@ impl Scalar {
             //
             // `from_scalar` just clones the bytes before byte_vec is dropped.
             let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) }; 
-            let inv = Scalar::from_bytes(bytes).unwrap();
+            let inv = match Option::<Scalar>::from(Scalar::from_bytes(bytes)) {
+                Some(v) => v,
+                None => sp1_lib::invalid_hint!("Scalar inverse: hint is not canonical"),
+            };
 
-            assert!(self * &inv == Scalar::one(), "Invalid hint: Scalar invert");
+            if self * &inv != Scalar::one() {
+                sp1_lib::invalid_hint!("Scalar inverse: hint did not invert self");
+            }
             return CtOption::new(inv, Choice::from(1u8));
         }
         #[cfg(not(target_os = "zkvm"))]

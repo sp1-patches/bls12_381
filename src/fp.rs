@@ -395,22 +395,37 @@ impl Fp {
             }
 
             // The first byte is the status of the sqrt syscall.
-            let status = read_vec()[0];
+            let status_vec = read_vec();
+            if status_vec.is_empty() {
+                sp1_lib::invalid_hint!("Fp sqrt: status hint missing");
+            }
+            let status = status_vec[0];
             // Assert the hook only writes back 48 bytes.
-            let byte_vec = read_vec().try_into().unwrap();
+            let byte_vec: [u8; 48] = match read_vec().try_into() {
+                Ok(v) => v,
+                Err(_) => sp1_lib::invalid_hint!("Fp sqrt: root hint is not 48 bytes"),
+            };
 
             match status {
                 0 => {
-                    let root = Fp::from_bytes(&byte_vec).unwrap();
-
-                    assert!(root * root == *self * nqr, "Invalid hint: Fp sqrt, non-quadratic residue");
+                    let root = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                        Some(r) => r,
+                        None => sp1_lib::invalid_hint!("Fp sqrt: NQR-root hint is not canonical"),
+                    };
+                    if root * root != *self * nqr {
+                        sp1_lib::invalid_hint!("Fp sqrt: NQR-root hint failed root^2 = self*nqr");
+                    }
 
                     CtOption::new(Fp::zero(), Choice::from(0u8))
                 }
                 _ => {
-                    let root = Fp::from_bytes(&byte_vec).unwrap();
-
-                    assert!(root * root == *self, "Invalid hint: Fp sqrt");
+                    let root = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                        Some(r) => r,
+                        None => sp1_lib::invalid_hint!("Fp sqrt: root hint is not canonical"),
+                    };
+                    if root * root != *self {
+                        sp1_lib::invalid_hint!("Fp sqrt: root hint failed root^2 = self");
+                    }
 
                     CtOption::new(root, Choice::from(1u8))
                 }
@@ -448,11 +463,19 @@ impl Fp {
                 sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_INVERSE, &self.to_bytes()); 
             }
 
-            let byte_vec = read_vec().try_into().unwrap();
+            let byte_vec: [u8; 48] = match read_vec().try_into() {
+                Ok(v) => v,
+                Err(_) => sp1_lib::invalid_hint!("Fp inverse: hint is not 48 bytes"),
+            };
 
-            let inv = Fp::from_bytes(&byte_vec).unwrap();
-            
-            assert!(self * &inv == Fp::one(), "Invalid hint: Fp invert");
+            let inv = match Option::<Fp>::from(Fp::from_bytes(&byte_vec)) {
+                Some(v) => v,
+                None => sp1_lib::invalid_hint!("Fp inverse: hint is not canonical"),
+            };
+
+            if self * &inv != Fp::one() {
+                sp1_lib::invalid_hint!("Fp inverse: hint did not invert self");
+            }
 
             CtOption::new(inv, Choice::from(1u8))
         }
