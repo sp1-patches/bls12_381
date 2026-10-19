@@ -318,8 +318,13 @@ impl G2Affine {
     /// Attempts to deserialize an uncompressed element. See [`notes::serialization`](crate::notes::serialization)
     /// for details about how group elements are serialized.
     pub fn from_uncompressed(bytes: &[u8; 192]) -> CtOption<Self> {
-        Self::from_uncompressed_unchecked(bytes)
-            .and_then(|p| CtOption::new(p, p.is_on_curve() & p.is_torsion_free()))
+        Self::from_uncompressed_unchecked(bytes).and_then(|p| {
+            if bool::from(p.is_on_curve()) {
+                CtOption::new(p, p.is_torsion_free())
+            } else {
+                CtOption::new(p, Choice::from(0u8))
+            }
+        })
     }
 
     /// Attempts to deserialize an uncompressed element, not checking if the
