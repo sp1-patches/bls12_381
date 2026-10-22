@@ -968,6 +968,7 @@ impl G1Projective {
 
     /// Performs a Variable Base Multiscalar Multiplication.
     pub fn msm_variable_base(points: &[G1Projective], scalars: &[Scalar]) -> G1Projective {
+        assert_eq!(points.len(), scalars.len(), "MSM input lengths differ");
         let c = if scalars.len() < 32 {
             3
         } else {
