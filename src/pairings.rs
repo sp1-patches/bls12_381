@@ -382,7 +382,7 @@ impl<'a> AddAssign<&'a MillerLoopResult> for MillerLoopResult {
 /// keep code and abstractions consistent.
 #[cfg_attr(docsrs, doc(cfg(feature = "pairings")))]
 #[derive(Copy, Clone, Debug)]
-pub struct Gt(pub Fp12);
+pub struct Gt(pub(crate) Fp12);
 
 impl Default for Gt {
     fn default() -> Self {

@@ -565,7 +565,7 @@ impl Scalar {
     }
 
     #[inline(always)]
-    pub const fn montgomery_reduce(
+    pub(crate) const fn montgomery_reduce(
         r0: u64,
         r1: u64,
         r2: u64,
@@ -740,7 +740,7 @@ impl Scalar {
     }
 
     #[inline]
-    pub fn divn(&self, mut n: u32) -> Scalar {
+    pub(crate) fn divn(&self, mut n: u32) -> Scalar {
         if n >= 256 {
             return Scalar::from(0);
         }
