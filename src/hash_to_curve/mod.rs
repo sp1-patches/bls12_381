@@ -11,7 +11,7 @@ mod expand_msg;
 pub use self::expand_msg::{ExpandMessage, ExpandMsgXmd, ExpandMsgXof, Message};
 
 mod map_g1;
-pub mod map_g2;
+mod map_g2;
 mod map_scalar;
 
 use crate::generic_array::{

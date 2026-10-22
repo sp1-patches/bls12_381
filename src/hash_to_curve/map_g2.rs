@@ -388,7 +388,7 @@ impl Sgn0 for Fp2 {
 }
 
 /// Maps from an [`Fp2]` element to a point on iso-G2.
-pub fn map_to_curve_simple_swu(u: &Fp2) -> G2Projective {
+fn map_to_curve_simple_swu(u: &Fp2) -> G2Projective {
     let usq = u.square();
     let xi_usq = SSWU_XI * usq;
     let xisq_u4 = xi_usq.square();
@@ -454,7 +454,7 @@ pub fn map_to_curve_simple_swu(u: &Fp2) -> G2Projective {
 }
 
 /// Maps from an iso-G2 point to a G2 point.
-pub fn iso_map(u: &G2Projective) -> G2Projective {
+fn iso_map(u: &G2Projective) -> G2Projective {
     const COEFFS: [&[Fp2]; 4] = [&ISO3_XNUM, &ISO3_XDEN, &ISO3_YNUM, &ISO3_YDEN];
 
     // unpack input point
