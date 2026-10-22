@@ -13,7 +13,7 @@ pub use self::expand_msg::{
 };
 
 mod map_g1;
-pub mod map_g2;
+mod map_g2;
 mod map_scalar;
 
 use crate::generic_array::{typenum::Unsigned, ArrayLength, GenericArray};
