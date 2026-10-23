@@ -483,7 +483,7 @@ impl G1Affine {
             }
         }
     }
-    
+
     #[inline(always)]
     pub fn double(mut self) -> Self {
         if self.is_identity().into() {
@@ -505,7 +505,7 @@ impl G1Affine {
                 G1Affine::from(res)
             }
         }
-    } 
+    }
 }
 
 /// A nontrivial third root of unity in Fp

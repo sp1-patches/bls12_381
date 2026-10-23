@@ -27,7 +27,7 @@ jobs:
       matrix:
         target:
           - wasm32-unknown-unknown
-          - wasm32-wasi
+          - wasm32-wasip1
     steps:
       - name: Set up git private repo access
         run: |

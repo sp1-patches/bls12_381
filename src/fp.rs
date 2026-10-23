@@ -46,20 +46,22 @@ impl zeroize::DefaultIsZeroes for Fp {}
 
 impl ConstantTimeEq for Fp {
     fn ct_eq(&self, other: &Self) -> Choice {
-          self.0[0].ct_eq(&other.0[0]) & self.0[1].ct_eq(&other.0[1]) & self.0[2].ct_eq(&other.0[2])
-              & self.0[3].ct_eq(&other.0[3])
-              & self.0[4].ct_eq(&other.0[4])
-              & self.0[5].ct_eq(&other.0[5])
+        self.0[0].ct_eq(&other.0[0])
+            & self.0[1].ct_eq(&other.0[1])
+            & self.0[2].ct_eq(&other.0[2])
+            & self.0[3].ct_eq(&other.0[3])
+            & self.0[4].ct_eq(&other.0[4])
+            & self.0[5].ct_eq(&other.0[5])
     }
 }
 
- impl Eq for Fp {}
- impl PartialEq for Fp {
-     #[inline]
-     fn eq(&self, other: &Self) -> bool {
-         bool::from(self.ct_eq(other))
-     }
- }
+impl Eq for Fp {}
+impl PartialEq for Fp {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        bool::from(self.ct_eq(other))
+    }
+}
 
 impl ConditionallySelectable for Fp {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
@@ -405,9 +407,9 @@ impl Fp {
             })
             .unwrap();
 
-            // Use a hook to see if we can decompress with the syscall. 
+            // Use a hook to see if we can decompress with the syscall.
             sp1_lib::unconstrained! {
-                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_SQRT, &self.to_bytes()); 
+                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_SQRT, &self.to_bytes());
             }
 
             // The first byte is the status of the sqrt syscall.
@@ -476,7 +478,7 @@ impl Fp {
             }
 
             unconstrained! {
-                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_INVERSE, &self.to_bytes()); 
+                sp1_lib::io::write(sp1_lib::io::FD_BLS12_381_INVERSE, &self.to_bytes());
             }
 
             let byte_vec: [u8; 48] = match read_vec().try_into() {

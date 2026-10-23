@@ -93,7 +93,7 @@ const R_INV: [u64; 4] = [
     0x13f7_5b69_fe75_c040,
     0xab6f_ca8f_09dc_705f,
     0x7204_078a_4f77_266a,
-    0x1bbe_8693_3000_9d57
+    0x1bbe_8693_3000_9d57,
 ];
 
 // The number of bits needed to represent the modulus.
@@ -541,13 +541,13 @@ impl Scalar {
                 );
             }
 
-            // Safety: 
+            // Safety:
             //
             // - The byte_vec is guaranteed to be 32 bytes long because we just pushed it,
             // and the executor always pushes to the front of the input buffer.
             //
             // `from_scalar` just clones the bytes before byte_vec is dropped.
-            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) }; 
+            let bytes = unsafe { &*(byte_vec.as_ptr() as *const [u8; 32]) };
             let inv = match Option::<Scalar>::from(Scalar::from_bytes(bytes)) {
                 Some(v) => v,
                 None => sp1_lib::invalid_hint!("Scalar inverse: hint is not canonical"),

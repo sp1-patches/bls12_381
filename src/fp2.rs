@@ -14,7 +14,7 @@ use {
         unconstrained,
     },
     sp1_lib::{
-        syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bls12381_fp2_mulmod
+        syscall_bls12381_fp2_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod,
     },
 };
 
@@ -581,7 +581,7 @@ impl Fp2 {
             // or we hint in sqrt(nqr * self)
             unconstrained! {
                let mut buf = [0u8; 97];
-                
+
                if let Some(root) = self.cpu_sqrt().into_option() {
                    let bytes = root.to_bytes();
                    buf[..96].copy_from_slice(&bytes);
@@ -599,10 +599,7 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 97 {
-                sp1_lib::invalid_hint!(
-                    "Fp2 sqrt: hint length is {}, expected 97",
-                    byte_vec.len()
-                );
+                sp1_lib::invalid_hint!("Fp2 sqrt: hint length is {}, expected 97", byte_vec.len());
             }
             let status = byte_vec[96];
 
