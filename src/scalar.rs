@@ -93,7 +93,7 @@ const R_INV: [u64; 4] = [
     0x13f7_5b69_fe75_c040,
     0xab6f_ca8f_09dc_705f,
     0x7204_078a_4f77_266a,
-    0x1bbe_8693_3000_9d57
+    0x1bbe_8693_3000_9d57,
 ];
 
 // The number of bits needed to represent the modulus.
