@@ -1,8 +1,8 @@
-use bls12_381::hash_to_curve::*;
 use digest::generic_array::typenum::U32;
 use hex_literal::hex;
 use sha2::{Sha256, Sha512};
 use sha3::{Shake128, Shake256};
+use sp1_bls12_381::hash_to_curve::*;
 
 #[test]
 fn test_expand_message_parts() {

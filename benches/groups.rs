@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate criterion;
 
-extern crate bls12_381;
-use bls12_381::*;
+extern crate sp1_bls12_381;
+use sp1_bls12_381::*;
 
 use criterion::{black_box, Criterion};
 

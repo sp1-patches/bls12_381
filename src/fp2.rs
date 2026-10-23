@@ -14,7 +14,7 @@ use {
         unconstrained,
     },
     sp1_lib::{
-        syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bls12381_fp2_mulmod,
+        syscall_bls12381_fp2_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod,
     },
 };
 
@@ -597,10 +597,7 @@ impl Fp2 {
 
             let byte_vec = read_vec();
             if byte_vec.len() != 97 {
-                sp1_lib::invalid_hint!(
-                    "Fp2 sqrt: hint length is {}, expected 97",
-                    byte_vec.len()
-                );
+                sp1_lib::invalid_hint!("Fp2 sqrt: hint length is {}, expected 97", byte_vec.len());
             }
             let status = byte_vec[96];
 
@@ -624,9 +621,7 @@ impl Fp2 {
                     let has_root = self * nqr;
 
                     if root * root != has_root {
-                        sp1_lib::invalid_hint!(
-                            "Fp2 sqrt: NQR-root hint failed root^2 = self*nqr"
-                        );
+                        sp1_lib::invalid_hint!("Fp2 sqrt: NQR-root hint failed root^2 = self*nqr");
                     }
 
                     CtOption::new(Self::zero(), Choice::from(0u8))
