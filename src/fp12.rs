@@ -304,6 +304,7 @@ impl Fp12 {
             })
     }
 
+    /// Encodes c0 then c1 using [`Fp6::to_bytes`].
     #[inline]
     pub fn to_bytes(&self) -> [u8; 576] {
         let mut res = [0; 576];
@@ -312,6 +313,7 @@ impl Fp12 {
         res
     }
 
+    /// Decodes the raw field format produced by [`Self::to_bytes`].
     #[inline]
     // This function panics when the input is non-canonical, unlike `Fp`'s `from_bytes`.
     pub fn from_bytes(bytes: &[u8; 576]) -> CtOption<Fp12> {
