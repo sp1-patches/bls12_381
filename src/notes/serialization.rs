@@ -1,5 +1,7 @@
 //! # BLS12-381 serialization
 //!
+//! The following rules describe G1 and G2 point encodings.
+//!
 //! * $\mathbb{F}\_p$ elements are encoded in big-endian form. They occupy 48
 //!   bytes in this form.
 //! * $\mathbb{F}\_{p^2}$ elements are encoded in big-endian form, meaning that
@@ -27,3 +29,13 @@
 //!   compressed form _and_ it is not the point at infinity _and_ its
 //!   y-coordinate is the lexicographically largest of the two associated with
 //!   the encoded x-coordinate.
+//!
+//! ## Raw field encodings
+//!
+//! The SP1 patch also exposes raw field byte methods with a different format.
+//! `Fp2::to_bytes` and `Fp2::from_bytes` use c0 followed by c1, each encoded
+//! as 48 big-endian bytes. G2 point encodings use c1 followed by c0 instead.
+//!
+//! `Fp6` byte methods use c0, c1, then c2, each in the raw Fp2 format.
+//! `Fp12` byte methods use c0 then c1, each in the raw Fp6 format.
+//! Each raw encoder and its matching decoder use the same coefficient order.

@@ -225,6 +225,8 @@ impl Fp2 {
             | (self.c1.is_zero() & self.c0.lexicographically_largest())
     }
 
+    /// Encodes c0 then c1, each as 48 big-endian bytes.
+    /// This is the raw field format. G2 point encodings put c1 first.
     #[inline]
     pub fn to_bytes(&self) -> [u8; 96] {
         let mut res = [0; 96];
@@ -233,6 +235,7 @@ impl Fp2 {
         res
     }
 
+    /// Decodes the raw field format produced by [`Self::to_bytes`].
     #[inline]
     // This function panics when the input is non-canonical, unlike `Fp`'s `from_bytes`.
     pub fn from_bytes(bytes: &[u8; 96]) -> CtOption<Fp2> {
